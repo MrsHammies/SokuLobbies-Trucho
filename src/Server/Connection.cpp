@@ -222,6 +222,21 @@ bool Connection::isConnected() const
 	return this->_connected;
 }
 
+bool Connection::quickJoinEnabled() const
+{
+	return this->_allowsQuickJoin;
+}
+
+void Connection::disableQuickJoin()
+{
+	this->_allowsQuickJoin = false;
+}
+
+void Connection::enableQuickJoin()
+{
+	this->_allowsQuickJoin = true;
+}
+
 bool Connection::_handlePacket(const Lobbies::Packet &packet, size_t &size)
 {
 #ifndef _LOBBYNOLOG

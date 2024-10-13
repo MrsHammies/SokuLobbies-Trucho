@@ -30,6 +30,7 @@ private:
 	const char *_password;
 	bool _connected = true;
 	bool _init = false;
+	bool _allowsQuickJoin = true;
 	uint32_t _id = 0;
 	Lobbies::Soku2VersionInfo _soku2Infos;
 	unsigned char _versionString[16];
@@ -106,6 +107,9 @@ public:
 	Lobbies::LobbySettings getSettings() const;
 	Lobbies::PlayerCustomization getPlayer() const;
 	bool isConnected() const;
+	bool quickJoinEnabled() const;
+	void disableQuickJoin();
+	void enableQuickJoin();
 };
 
 
