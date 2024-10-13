@@ -1052,6 +1052,9 @@ void Server::_quickJoinCmd(Connection *author, const std::vector<std::string> &a
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	
+	if (author->getBattleStatus() == Lobbies::BATTLE_STATUS_WAITING)
+		return sendSystemMessageTo(author, "Can't use /quickjoin while hosting!", 0xFF0000);
+
 	std::vector<std::shared_ptr<Connection>> joinables;
 	
 	for(auto &player : this->_connections)
