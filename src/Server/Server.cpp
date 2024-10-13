@@ -353,7 +353,7 @@ void Server::_prepareConnectionHandlers(Connection &connection)
 
 		Lobbies::PacketOlleh res{this->_infos.name, name, id};
 		Lobbies::PacketPlayerJoin join{id, name, packet.custom};
-		Lobbies::PacketMessage msgPacket{0xFFFF00, 0, connection.getName() + " has joined the lobby."};
+		Lobbies::PacketMessage msgPacket{0xFFFF00, 0, connection.getName() + " ¡Bienvenido a Sokuway! Escribe /quickjoin para entrar a una partida random. Puedes evitar que otros usuarios se unan con esta opción escribiendo /disablerandom."};
 
 		std::cout << connection.getName() << " has joined the lobby." << std::endl;
 		connection.send(&res, sizeof(res));
