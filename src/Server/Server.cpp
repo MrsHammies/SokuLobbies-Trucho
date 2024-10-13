@@ -1099,7 +1099,7 @@ void Server::_anySokuCmd(Connection *author, const std::vector<std::string> &arg
 		if(player->getBattleStatus() == Lobbies::BATTLE_STATUS_WAITING || player->getBattleStatus() == Lobbies::BATTLE_STATUS_IDLE)
 			msg = msg + " " + player->getName();
 	}	
-	return sendSystemMessageTo(author, msg, 0xFF0000);
+	return sendSystemMessageTo(author, msg, 0x00FFFF);
 }
 
 
