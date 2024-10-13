@@ -19,6 +19,7 @@ extern std::mutex logMutex;
 #include "Server.hpp"
 #include "Utils.hpp"
 
+#define COLOR_PURPLE 0xCC66FF
 #ifdef _DEBUG
 #define DEBUG_COLOR 0x404040
 #define sendDebug(m) do { \
@@ -1077,7 +1078,7 @@ void Server::_allowRandom(Connection *author, const std::vector<std::string> &ar
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	author->enableQuickJoin();
-	return sendSystemMessageTo(author, "Players can randomly join your host now!", 0xFF0000);
+	return sendSystemMessageTo(author, "Players can randomly join your host now!", 0x00FFFF);
 }
 
 void Server::_disableRandom(Connection *author, const std::vector<std::string> &args)
@@ -1085,7 +1086,7 @@ void Server::_disableRandom(Connection *author, const std::vector<std::string> &
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	author->disableQuickJoin();
-	return sendSystemMessageTo(author, "Players can't randomly join your host now", 0xFF0000);
+	return sendSystemMessageTo(author, "Players can't randomly join your host now", 0x00FFFF);
 }
 
 void Server::_anySoku(Connection *author, const std::vector<std::string> &args)
