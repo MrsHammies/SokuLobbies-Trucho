@@ -157,16 +157,18 @@ private:
 	{
 		std::string usage;
 		std::string description;
-		void (InLobbyMenu::*callback)(const std::wstring &msg);
+		void (InLobbyMenu::*callback)(const std::vector<std::string> &msg);
 	};
-	std::vector<std::string> _parseCommand(const std::string &msg)
-	void _processCommands(const std::string &msg)
+	std::vector<std::string> _parseCommand(const std::string &msg);
+	void _processCommands(const std::string& msg);
 	static const std::map<std::string, Cmd> _commands;
-	void _setReservedCmd(const std::string &msg);
-	void _setAnyCmd(const std::string &msg);
-
+	void _setReservedCmd(const std::vector<std::string> &msg);
+	void _setAnyCmd(const std::vector<std::string> &msg);
+	void _helpCmd(const std::vector<std::string> &args);
+	void _hostlistCmd(const std::vector<std::string> &msg);
 	//Client settings
-	bool hostIsReserved = false;
+	bool _hostIsReserved = false;
+	bool _hostIsVisible = true; 
 
 public:
 	char textChanged = 0;
