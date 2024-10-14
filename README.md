@@ -8,3 +8,4 @@
  - Set ping limit for games
  - Set hosts as reserved
  - Save Settings
+ - Settings menú
