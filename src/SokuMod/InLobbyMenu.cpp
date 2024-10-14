@@ -481,8 +481,11 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 			machine.currentAnim = &lobbyData->arcades.select;
 			if (&p == this->_connection->getMe()) {
 				printf("Host pref %x\n", p.settings.hostPref);
-				if (p.settings.hostPref & Lobbies::HOSTPREF_ACCEPT_HOSTLIST)
-					this->_startHosting();
+				if(this->_hostIsVisible){
+					if (p.settings.hostPref & Lobbies::HOSTPREF_ACCEPT_HOSTLIST)
+						this->_startHosting();
+				}
+
 			}
 		} else if (machine.playerCount == 2) {
 			machine.animation = 0;
@@ -570,7 +573,7 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		}
 	}};
 	if (!Original_WndProc)
-		Original_WndProc = (WNDPROC) SetWindowLongPtr(SokuLib::window, GWL_WNDPROC, (LONG_PTR) Hooked_WndProc);
+		Original_WndProc = (WNDPROC) SetWindowLongPtr(SokuLib::window, GWLP_WNDPROC, (LONG_PTR) Hooked_WndProc);
 }
 
 InLobbyMenu::~InLobbyMenu()
@@ -1918,8 +1921,123 @@ void InLobbyMenu::_updateTextCursor(int pos)
 	ImmSetCandidateWindow(this->immCtx, &candidate);
 }
 
+//custom commands, client side only!
+const std::map<std::string, InLobbyMenu::Cmd> InLobbyMenu::_commands
+{
+	{"help",    {"[command]", "Displays list of client commands.\nExample:\n/help\n/help help", &InLobbyMenu::_helpCmd}},
+	{"reserved", {"", "Set your host as reserved", &InLobbyMenu::_setReservedCmd}},
+	{"any",	     {"", "Set your host as open for anyone", &InLobbyMenu::_setAnyCmd}},
+	{"hostlist", {"<enable or disable>", "Enables or disables your host being posted to hostlist", &InLobbyMenu::_hostlistCmd}},
+};
+
+std::vector<std::string> InLobbyMenu::_parseCommand(const std::string &msg)
+{
+	std::string token;
+	std::vector<std::string> result;
+	//bool q = false;
+	//bool sq = false;
+	bool esc = false;
+
+	for (auto c : msg) {
+		if (esc) {
+			token += c;
+			esc = false;
+		} else if (c == '\\')
+			esc = true;
+		/*else if (c == '"' && !sq)
+			q = !q;
+		else if (c == '\'' && !q)
+			sq = !sq;*/
+		else if (!isspace(c)/* || q || sq*/)
+			token += c;
+		else {
+			result.push_back(token);
+			token.clear();
+		}
+	}
+	result.push_back(token);
+	return result;
+}
+
+void InLobbyMenu::_processCommands(const std::string &msg)
+{
+	if (msg.empty())
+		return;
+
+	try {
+		auto parsed = this->_parseCommand(msg.front() == '!' ? msg.substr(1) : msg);
+		auto it = InLobbyMenu::_commands.find(parsed.front());
+
+		if (it != InLobbyMenu::_commands.end()) {
+			parsed.erase(parsed.begin());
+			return (this->*it->second.callback)(parsed);
+		}
+	} catch (std::exception &e) {
+		this->_addMessageToList(0xFF0000, 0, std::string(e.what()));
+	}
+}
+
+void InLobbyMenu::_helpCmd(const std::vector<std::string> &args)
+{
+	if (!args.empty()) {
+		auto it = InLobbyMenu::_commands.find(args[0]);
+
+		if (it != InLobbyMenu::_commands.end())
+			return this->_addMessageToList(0x00FFFF, 0, "/" + it->first + " " + it->second.usage + ": " + it->second.description);
+		return this->_addMessageToList(0x00FFFF, 0, "Unknown command");
+	}
+
+	std::string msg;
+
+	msg += "Available client commands:";
+	for (auto &cmd : InLobbyMenu::_commands) {
+		auto tmp = "/" + cmd.first + " " + cmd.second.usage;
+
+		if (msg.size() + tmp.size() < sizeof(Lobbies::PacketMessage::message))
+			msg += "\n" + tmp;
+		else {
+			return this->_addMessageToList(0x00FFFF, 0, msg);
+			msg = tmp;
+		}
+	}
+	this->_addMessageToList(0x00FFFF, 0, msg);
+}
+
+void InLobbyMenu::_hostlistCmd(const std::vector<std::string> &msg)
+{
+	if(msg.empty())
+		return;
+	auto arg = msg[0];
+	if(arg.compare("enable") == 0)
+	{
+		this->_hostIsVisible = true;
+		this->_addMessageToList(0x00FFFF, 0, "Your games will be broadcasted to the hostlist");
+	}else if(arg.compare("disable") == 0)
+	{
+		this->_hostIsVisible = false;
+		this->_addMessageToList(0x00FFFF, 0, "Your games won't be broadcasted to the hostlist");
+
+	}else
+	{
+		this->_addMessageToList(0xFF0000, 0, "Invalid argument. Only accepts enable and disable");
+	}
+}
+
+void InLobbyMenu::_setReservedCmd(const std::vector<std::string>&msg)
+{
+	this->_hostIsReserved = true;
+	this->_addMessageToList(0x00FFFF, 0, "Your host will appear as reserved now");
+}
+
+void  InLobbyMenu::_setAnyCmd(const std::vector<std::string> &msg)
+{
+	this->_hostIsReserved = false;
+	this->_addMessageToList(0x00FFFF, 0, "Your host won't appear as reserved anymore");
+}
+
 void InLobbyMenu::_sendMessage(const std::wstring &msg)
 {
+	//editar acá
 	std::string encoded;
 	std::wstring token;
 	std::wstring currentEmote;
@@ -1961,6 +2079,14 @@ void InLobbyMenu::_sendMessage(const std::wstring &msg)
 			(colon ? currentEmote : token) += c;
 	}
 	encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(token);
+
+	//Ver si es un comando
+	if(encoded[0]== '!')
+	{
+		this->_processCommands(encoded);
+		return;
+	}
+
 	if (colon) {
 		encoded += ':';
 		encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(currentEmote);
@@ -2251,11 +2377,12 @@ void InLobbyMenu::_startHosting()
 			}
 			*pos = 0;
 		}
+		auto hostMsg = this->_hostIsReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
 		printf("Putting hostlist %s:%u\n", dup, port);
 		th123intl::ConvertCodePage(th123intl::GetTextCodePage(), SokuLib::profile1.name.operator std::string(), CP_UTF8, converted);
 		nlohmann::json data = {
 			{"profile_name", converted},
-			{"message", "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual")},
+			{"message", hostMsg},
 			{"host", dup},
 			{"port", port}
 		};

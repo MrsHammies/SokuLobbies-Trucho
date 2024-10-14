@@ -19,6 +19,7 @@ extern std::mutex logMutex;
 #include "Server.hpp"
 #include "Utils.hpp"
 
+#define COLOR_PURPLE 0xCC66FF
 #ifdef _DEBUG
 #define DEBUG_COLOR 0x404040
 #define sendDebug(m) do { \
@@ -826,10 +827,10 @@ const std::map<std::string, Server::Cmd> Server::_commands{
 	{"list",    {"", "Displays the list of connected players.", &Server::_listCmd}},
 	{"locate",  {"<player_name>", "Locate a player in the field.\nExample:\n/locate 1\n/locate @PinkySmile", &Server::_locateCmd}},
 	{"msg",     {"<player_name> <message>", "Sends a message privately\nExample:\n/msg @PinkySmile Hello!", &Server::_msgCmd}},
-	{"anysoku",     {"", "Displays players currently available for games", &Server::_anySoku}},
-	{"quickjoin",{"", "Randomly joins an arcade", &Server::_quickJoin}},
-	{"allowrandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_allowRandom}},
-	{"disablerandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_disableRandom}},
+	{"anysoku",     {"", "Displays players currently available for games", &Server::_anySokuCmd}},
+	{"quickjoin",{"", "Randomly joins an arcade", &Server::_quickJoinCmd}},
+	{"allowrandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_allowRandomCmd}},
+	{"disablerandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_disableRandomCmd}},
 };
 
 const std::map<std::string, Server::Cmd> Server::_adminCommands{
@@ -1046,11 +1047,14 @@ void Server::_msgCmd(Connection *author, const std::vector<std::string> &args)
 	player->send(&msgPacket1, sizeof(msgPacket1));
 }
 
-void Server::_quickJoin(Connection *author, const std::vector<std::string> &args)
+void Server::_quickJoinCmd(Connection *author, const std::vector<std::string> &args)
 {
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	
+	if (author->getBattleStatus() == Lobbies::BATTLE_STATUS_WAITING)
+		return sendSystemMessageTo(author, "Can't use /quickjoin while hosting!", 0xFF0000);
+
 	std::vector<std::shared_ptr<Connection>> joinables;
 	
 	for(auto &player : this->_connections)
@@ -1072,23 +1076,23 @@ void Server::_quickJoin(Connection *author, const std::vector<std::string> &args
 	this->_onPlayerJoinArcade(*author, *chosen->getActiveMachine());
 }
 
-void Server::_allowRandom(Connection *author, const std::vector<std::string> &args)
+void Server::_allowRandomCmd(Connection *author, const std::vector<std::string> &args)
 {
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	author->enableQuickJoin();
-	return sendSystemMessageTo(author, "Players can randomly join your host now!", 0xFF0000);
+	return sendSystemMessageTo(author, "Players can randomly join your host now!", 0x00FFFF);
 }
 
-void Server::_disableRandom(Connection *author, const std::vector<std::string> &args)
+void Server::_disableRandomCmd(Connection *author, const std::vector<std::string> &args)
 {
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
 	author->disableQuickJoin();
-	return sendSystemMessageTo(author, "Players can't randomly join your host now", 0xFF0000);
+	return sendSystemMessageTo(author, "Players can't randomly join your host now", 0x00FFFF);
 }
 
-void Server::_anySoku(Connection *author, const std::vector<std::string> &args)
+void Server::_anySokuCmd(Connection *author, const std::vector<std::string> &args)
 {
 	if (!author)
 		return sendSystemMessageTo(author, "Can only be used in a lobby", 0xFF0000);
@@ -1098,7 +1102,7 @@ void Server::_anySoku(Connection *author, const std::vector<std::string> &args)
 		if(player->getBattleStatus() == Lobbies::BATTLE_STATUS_WAITING || player->getBattleStatus() == Lobbies::BATTLE_STATUS_IDLE)
 			msg = msg + " " + player->getName();
 	}	
-	return sendSystemMessageTo(author, msg, 0xFF0000);
+	return sendSystemMessageTo(author, msg, 0x00FFFF);
 }
 
 
