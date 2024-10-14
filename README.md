@@ -1,3 +1,7 @@
+SokuLobbies-Trucho is a modification of the original SokuLobbies code made by Pinky to add some extra features.  
+This is heavily WIP so some bugs can be expected.
+
+
 # TODO list
 
  - Quick Spectate
@@ -9,3 +13,4 @@
  - Set hosts as reserved
  - Save Settings
  - Settings menú
+ - InGameHostlist integration
