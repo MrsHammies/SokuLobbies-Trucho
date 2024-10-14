@@ -481,8 +481,11 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 			machine.currentAnim = &lobbyData->arcades.select;
 			if (&p == this->_connection->getMe()) {
 				printf("Host pref %x\n", p.settings.hostPref);
-				if (p.settings.hostPref & this->_hostIsVisible)
-					this->_startHosting();
+				if(this->_hostIsVisible){
+					if (p.settings.hostPref & Lobbies::HOSTPREF_ACCEPT_HOSTLIST)
+						this->_startHosting();
+				}
+
 			}
 		} else if (machine.playerCount == 2) {
 			machine.animation = 0;
