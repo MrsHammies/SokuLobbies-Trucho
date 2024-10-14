@@ -7,3 +7,4 @@
  - Lobby Favourite
  - Set ping limit for games
  - Set hosts as reserved
+ - Save Settings
