@@ -151,6 +151,23 @@ private:
 	void _openMessageBox(int sound, const std::string &text, const std::string &title, UINT type);
 	int _getTextSize(unsigned i);
 
+	//custom commands
+
+	struct Cmd 
+	{
+		std::string usage;
+		std::string description;
+		void (InLobbyMenu::*callback)(const std::wstring &msg);
+	};
+	std::vector<std::string> _parseCommand(const std::string &msg)
+	void _processCommands(const std::string &msg)
+	static const std::map<std::string, Cmd> _commands;
+	void _setReservedCmd(const std::string &msg);
+	void _setAnyCmd(const std::string &msg);
+
+	//Client settings
+	bool hostIsReserved = false;
+
 public:
 	char textChanged = 0;
 	HIMC immCtx = nullptr;

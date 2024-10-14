@@ -1918,8 +1918,75 @@ void InLobbyMenu::_updateTextCursor(int pos)
 	ImmSetCandidateWindow(this->immCtx, &candidate);
 }
 
+//custom commands, client side only!
+std::vector<std::string> InLobbyMenu::_parseCommand(const std::wstring &msg)
+{
+	std::string token;
+	std::vector<std::string> result;
+	//bool q = false;
+	//bool sq = false;
+	bool esc = false;
+
+	for (auto c : msg) {
+		if (esc) {
+			token += c;
+			esc = false;
+		} else if (c == '\\')
+			esc = true;
+		/*else if (c == '"' && !sq)
+			q = !q;
+		else if (c == '\'' && !q)
+			sq = !sq;*/
+		else if (!isspace(c)/* || q || sq*/)
+			token += c;
+		else {
+			result.push_back(token);
+			token.clear();
+		}
+	}
+	result.push_back(token);
+	return result;
+}
+
+
+void InLobbyMenu::_processCommands(const std::string &msg)
+{
+	if (msg.empty())
+		return;
+
+	try {
+		auto parsed = this->_parseCommand(msg.front() == '/' ? msg.substr(1) : msg);
+		auto it = InLobbyMenu::_commands.find(parsed.front());
+
+		if (it != InLobbyMenu::_commands.end()) {
+			parsed.erase(parsed.begin());
+			return (this->*it->second.callback)(parsed);
+		}
+	} catch (std::exception &e) {
+	}
+}
+
+const std::map<std::string, InLobbyMenu::Cmd> InLobbyMenu::_commands
+{
+	{"!set reserved", {"", "Set your host as reserved", &InLobbyMenu::_setReservedCmd}},
+	{"!set any",	  {"", "Set your host as open for anyone", &InLobbyMenu::_setAnyCmd}},
+};
+
+void  InLobbyMenu::_setReservedCmd(const std::string &msg)
+{
+	this->hostIsReserved = true;
+	this->_addMessageToList(0x00FFFF, 0, "Your host will appear as reserved now");
+}
+
+void  InLobbyMenu::_setAnyCmd(const std::string &msg)
+{
+	this->hostIsReserved = false;
+	this->_addMessageToList(0x00FFFF, 0, "Your host won't appear as reserved anymore");
+}
+
 void InLobbyMenu::_sendMessage(const std::wstring &msg)
 {
+	//editar acá
 	std::string encoded;
 	std::wstring token;
 	std::wstring currentEmote;
@@ -1961,6 +2028,14 @@ void InLobbyMenu::_sendMessage(const std::wstring &msg)
 			(colon ? currentEmote : token) += c;
 	}
 	encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(token);
+
+	//Ver si es un comando
+	if(encoded[0]== '!')
+	{
+		this->_processCommands(encoded);
+		return; 
+	}
+
 	if (colon) {
 		encoded += ':';
 		encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(currentEmote);
@@ -2251,11 +2326,12 @@ void InLobbyMenu::_startHosting()
 			}
 			*pos = 0;
 		}
+		auto hostMsg = this->hostIsReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
 		printf("Putting hostlist %s:%u\n", dup, port);
 		th123intl::ConvertCodePage(th123intl::GetTextCodePage(), SokuLib::profile1.name.operator std::string(), CP_UTF8, converted);
 		nlohmann::json data = {
 			{"profile_name", converted},
-			{"message", "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual")},
+			{"message", hostMsg},
 			{"host", dup},
 			{"port", port}
 		};
