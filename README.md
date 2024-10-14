@@ -14,3 +14,4 @@ This is heavily WIP so some bugs can be expected.
  - Save Settings
  - Settings menú
  - InGameHostlist integration
+ - Lobby Billboard
