@@ -829,7 +829,7 @@ const std::map<std::string, Server::Cmd> Server::_commands{
 	{"msg",     {"<player_name> <message>", "Sends a message privately\nExample:\n/msg @PinkySmile Hello!", &Server::_msgCmd}},
 	{"anysoku",     {"", "Displays players currently available for games", &Server::_anySokuCmd}},
 	{"quickjoin",{"", "Randomly joins an arcade", &Server::_quickJoinCmd}},
-	{"allowrandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_allowRandomCmd}},
+	{"allowrandom",{"", "Players typing /quickjoin can randomly join your arcade", &Server::_allowRandomCmd}},
 	{"disablerandom",{"", "Players typing /quickjoin can't randomly join your arcade", &Server::_disableRandomCmd}},
 };
 
