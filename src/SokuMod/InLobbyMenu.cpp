@@ -16,6 +16,7 @@
 #include "integration.hpp"
 #include "getPublicIp.hpp"
 #include "ipv6map_extern.hpp"
+#include "LobbyOptions.hpp"
 
 #define CHAT_CHARACTER_LIMIT 512
 #define BOX_TEXTURE_SIZE {0x2000, 30}
@@ -31,7 +32,7 @@
 #define DEBUG_COLOR 0x404040
 
 struct CDesignSprite {
-	void *vftable; // =008576ac
+	void* vftable; // =008576ac
 	float UNKNOWN_1[2];
 	float x;
 	float y;
@@ -40,8 +41,8 @@ struct CDesignSprite {
 	int32_t UNKNOWN_3;
 };
 
-auto &messageBox = *(CDesignSprite**)0x89a390;
-InLobbyMenu *activeMenu = nullptr;
+auto& messageBox = *(CDesignSprite**)0x89a390;
+InLobbyMenu* activeMenu = nullptr;
 static WNDPROC Original_WndProc = nullptr;
 static std::mutex ptrMutex;
 static std::mt19937 random;
@@ -52,10 +53,10 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 		uMsg == WM_IME_NOTIFY &&
 		wParam == IMN_PRIVATE && (
 			lParam == 1 || lParam == 2 ||
-			lParam == 16|| lParam == 17||
-			lParam == 26|| lParam == 27|| lParam == 28
+			lParam == 16 || lParam == 17 ||
+			lParam == 26 || lParam == 27 || lParam == 28
+			)
 		)
-	)
 		return 0;
 
 	unsigned eventList[] = {
@@ -82,7 +83,8 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 			activeMenu->immComposition.clear();
 			activeMenu->compositionCursor = 0;
 			ptrMutex.unlock();
-		} else if (wineVersion && (wParam == 0xf || wParam == 0x10))
+		}
+		else if (wineVersion && (wParam == 0xf || wParam == 0x10))
 			//#define IMN_WINE_SET_OPEN_STATUS  0x000f
 			//#define IMN_WINE_SET_COMP_STRING  0x0010
 			// On wine>=8.9 IMN_WINE_SET_COMP_STRING should be processed by DefWindowProc,
@@ -99,20 +101,22 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 	}
 	if (uMsg == WM_INPUTLANGCHANGE) {
 		activeMenu->immComposition.clear();
-	} else if (uMsg == WM_IME_STARTCOMPOSITION) {
+	}
+	else if (uMsg == WM_IME_STARTCOMPOSITION) {
 		activeMenu->immCtx = ImmGetContext(SokuLib::window);
 		// This disables the windows builtin IME window.
 		// For now we keep it because part of its features are not properly supported.
 		//ptrMutex.unlock();
 		//return 0;
-	} else if (uMsg == WM_IME_ENDCOMPOSITION) {
+	}
+	else if (uMsg == WM_IME_ENDCOMPOSITION) {
 		MSG compositionMsg;
 
 		if (
 			::PeekMessage(&compositionMsg, hWnd, WM_IME_STARTCOMPOSITION, WM_IME_COMPOSITION, PM_NOREMOVE) &&
 			compositionMsg.message == WM_IME_COMPOSITION &&
 			(compositionMsg.lParam & GCS_RESULTSTR)
-		) {
+			) {
 			ptrMutex.unlock();
 			return CallWindowProc(Original_WndProc, hWnd, uMsg, wParam, lParam);
 		}
@@ -124,7 +128,8 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 		// For now we keep it because part of its features are not properly supported.
 		//ptrMutex.unlock();
 		//return 0;
-	} else if (uMsg == WM_IME_COMPOSITION) {
+	}
+	else if (uMsg == WM_IME_COMPOSITION) {
 		// Wine (>=8.9, <=8.14) doesn't send WM_IME_STARTCOMPOSITION and WM_IME_ENDCOMPOSITION,
 		// so here we call ImmGetContext as a workaround if necessary.
 		// Moreover, ImmReleaseContext on Wine does nothing but returns true.
@@ -137,7 +142,7 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 		activeMenu->onKeyReleased();
 		if (lParam & GCS_RESULTSTR) {
 			auto required = ImmGetCompositionStringW(activeMenu->immCtx, GCS_RESULTSTR, nullptr, 0);
-			auto immStr = (wchar_t *)malloc(required);
+			auto immStr = (wchar_t*)malloc(required);
 			bool v = false;
 
 			assert(required % 2 == 0);
@@ -171,7 +176,8 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 			);
 			activeMenu->textChanged |= 4;
 		}
-	} else if (uMsg == WM_KEYDOWN) {
+	}
+	else if (uMsg == WM_KEYDOWN) {
 		BYTE keyboardState[256];
 		wchar_t old[2];
 
@@ -183,13 +189,14 @@ static LRESULT __stdcall Hooked_WndProc(const HWND hWnd, UINT uMsg, WPARAM wPara
 
 		if (activeMenu->keyBufferUsed > 0)
 			activeMenu->onKeyPressed(UTF16Decode(std::wstring(activeMenu->keyBuffer, activeMenu->keyBuffer + activeMenu->keyBufferUsed))[0]);
-	} else if (uMsg == WM_KEYUP)
+	}
+	else if (uMsg == WM_KEYUP)
 		activeMenu->onKeyReleased();
 	ptrMutex.unlock();
 	return CallWindowProc(Original_WndProc, hWnd, uMsg, wParam, lParam);
 }
 
-bool isNumber(const std::string &str)
+bool isNumber(const std::string& str)
 {
 	for (auto c : str)
 		if (!std::isdigit(c))
@@ -197,7 +204,7 @@ bool isNumber(const std::string &str)
 	return true;
 }
 
-std::vector<std::string> split(const std::string &str, char delim)
+std::vector<std::string> split(const std::string& str, char delim)
 {
 	auto i = 0;
 	std::vector<std::string> list;
@@ -212,23 +219,23 @@ std::vector<std::string> split(const std::string &str, char delim)
 	return list;
 }
 
-bool checkIp(const std::string &ip)
+bool checkIp(const std::string& ip)
 {
 	std::vector<std::string> list = split(ip, '.');
 
 	if (list.size() != 4)
 		return false;
-	for (const auto &str : list)
+	for (const auto& str : list)
 		if (!isNumber(str) || stoi(str) > 255 || stoi(str) < 0)
 			return false;
 	return true;
 }
 
-void InLobbyMenu::_openMessageBox(int sound, const std::string &text, const std::string &title, UINT type)
+void InLobbyMenu::_openMessageBox(int sound, const std::string& text, const std::string& title, UINT type)
 {
 	if (SokuLib::sceneId == SokuLib::SCENE_BATTLECL || SokuLib::sceneId == SokuLib::SCENE_BATTLESV) {
 		std::lock_guard<std::mutex> messageBoxMutexGuard(this->_messageBoxQueueMutex);
-		this->_messageBoxQueue.push(MessageBoxArgs{sound, text, title, type});
+		this->_messageBoxQueue.push(MessageBoxArgs{ sound, text, title, type });
 	}
 	else {
 		playSound(sound);
@@ -236,13 +243,13 @@ void InLobbyMenu::_openMessageBox(int sound, const std::string &text, const std:
 	}
 }
 
-InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::shared_ptr<Connection> &connection) :
+InLobbyMenu::InLobbyMenu(LobbyMenu* menu, SokuLib::MenuConnect* parent, std::shared_ptr<Connection>& connection) :
 	_connection(connection),
 	_parent(parent),
 	_menu(menu)
 {
 	SokuLib::FontDescription desc;
-	bool hasEnglishPatch = (*(int *)0x411c64 == 1);
+	bool hasEnglishPatch = (*(int*)0x411c64 == 1);
 
 	desc.r1 = 255;
 	desc.r2 = 255;
@@ -268,7 +275,7 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 	this->_chatFont.setIndirect(desc);
 
 	for (int i = 0; i < 3; i++) {
-		const char *paths[3] = {
+		const char* paths[3] = {
 			"assets/lobby/waiting.png",
 			"assets/lobby/fighting.png",
 			"assets/lobby/watching.png",
@@ -278,50 +285,50 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		this->_battleStatus[i].setSize({
 			this->_battleStatus[i].texture.getSize().x,
 			this->_battleStatus[i].texture.getSize().y
-		});
+			});
 		this->_battleStatus[i].rect.width = this->_battleStatus[i].texture.getSize().x;
 		this->_battleStatus[i].rect.height = this->_battleStatus[i].texture.getSize().y;
-		this->_battleStatus[i].setPosition({174, 218});
+		this->_battleStatus[i].setPosition({ 174, 218 });
 	}
 
 	this->_chatSeat.texture.loadFromFile((std::filesystem::path(profileFolderPath) / "assets/lobby/chat_seat.png").string().c_str());
 	this->_chatSeat.setSize({
 		this->_chatSeat.texture.getSize().x,
 		this->_chatSeat.texture.getSize().y
-	});
+		});
 	this->_chatSeat.rect.width = this->_chatSeat.texture.getSize().x;
 	this->_chatSeat.rect.height = this->_chatSeat.texture.getSize().y;
-	this->_chatSeat.setPosition({290, 0});
-	this->_chatSeat.tint = SokuLib::Color{0xFF, 0xFF, 0xFF, 0};
+	this->_chatSeat.setPosition({ 290, 0 });
+	this->_chatSeat.tint = SokuLib::Color{ 0xFF, 0xFF, 0xFF, 0 };
 
-	this->_loadingText.texture.createFromText("Joining Lobby...", lobbyData->getFont(16), {300, 74});
+	this->_loadingText.texture.createFromText("Joining Lobby...", lobbyData->getFont(16), { 300, 74 });
 	this->_loadingText.setSize({
 		this->_loadingText.texture.getSize().x,
 		this->_loadingText.texture.getSize().y
-	});
+		});
 	this->_loadingText.rect.width = this->_loadingText.texture.getSize().x;
 	this->_loadingText.rect.height = this->_loadingText.texture.getSize().y;
-	this->_loadingText.setPosition({174, 218});
+	this->_loadingText.setPosition({ 174, 218 });
 
 	this->_messageBox.texture.loadFromGame("data/menu/21_Base.cv2");
 	this->_messageBox.setSize({
 		this->_messageBox.texture.getSize().x,
 		this->_messageBox.texture.getSize().y
-	});
+		});
 	this->_messageBox.rect.width = this->_messageBox.texture.getSize().x;
 	this->_messageBox.rect.height = this->_messageBox.texture.getSize().y;
-	this->_messageBox.setPosition({155, 203});
+	this->_messageBox.setPosition({ 155, 203 });
 
 	this->_loadingGear.texture.loadFromGame("data/scene/logo/gear.bmp");
 	this->_loadingGear.setSize({
 		this->_loadingGear.texture.getSize().x,
 		this->_loadingGear.texture.getSize().y
-	});
+		});
 	this->_loadingGear.rect.width = this->_loadingGear.texture.getSize().x;
 	this->_loadingGear.rect.height = this->_loadingGear.texture.getSize().y;
 
-	this->_textCursor.setSize({1, 14});
-	this->_textCursor.setPosition({CURSOR_STARTX, CURSOR_STARTY});
+	this->_textCursor.setSize({ 1, 14 });
+	this->_textCursor.setPosition({ CURSOR_STARTX, CURSOR_STARTY });
 	this->_textCursor.setFillColor(SokuLib::Color::White);
 	this->_textCursor.setBorderColor(SokuLib::Color::Transparent);
 
@@ -330,8 +337,8 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 	this->_textSprite[0].setSize(SokuLib::Vector2i{
 		this->_textSprite[0].rect.width,
 		this->_textSprite[0].rect.height
-	}.to<unsigned>());
-	this->_textSprite[0].setPosition({CURSOR_STARTX - (*(int *)0x411c64 == 1) * 2, CURSOR_STARTY});
+		}.to<unsigned>());
+	this->_textSprite[0].setPosition({ CURSOR_STARTX - (*(int*)0x411c64 == 1) * 2, CURSOR_STARTY });
 	for (int i = ' '; i < 0x100; i++)
 		this->_getTextSize(i);
 	std::lock_guard<std::mutex> functionMutexGuard(this->_connection->functionMutex);
@@ -341,26 +348,26 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 	this->onMsg = this->_connection->onMsg;
 	this->onHostRequest = this->_connection->onHostRequest;
 	this->onConnect = this->_connection->onConnect;
-	this->_connection->onDisconnect = [this]{
+	this->_connection->onDisconnect = [this] {
 		this->_disconnected = true;
-	};
-	this->_connection->onPlayerJoin = [this](const Player &r){
+		};
+	this->_connection->onPlayerJoin = [this](const Player& r) {
 		SokuLib::Vector2i size;
 		int texId = 0;
 
-		if (!createTextTexture(texId, convertEncoding<char, wchar_t, UTF8Decode, UTF16Encode>(r.name).c_str(), lobbyData->getFont(16), {200, 20}, &size))
+		if (!createTextTexture(texId, convertEncoding<char, wchar_t, UTF8Decode, UTF16Encode>(r.name).c_str(), lobbyData->getFont(16), { 200, 20 }, &size))
 			puts("Error creating text texture");
-		this->_extraPlayerData[r.id].name.texture.setHandle(texId, {200, 20});
+		this->_extraPlayerData[r.id].name.texture.setHandle(texId, { 200, 20 });
 		this->_extraPlayerData[r.id].name.setSize(size.to<unsigned>());
 		this->_extraPlayerData[r.id].name.rect.width = size.x;
 		this->_extraPlayerData[r.id].name.rect.height = size.y;
-	};
-	this->_connection->onConnect = [this](const Lobbies::PacketOlleh &r){
-		auto &bg = lobbyData->backgrounds[r.bg];
+		};
+	this->_connection->onConnect = [this](const Lobbies::PacketOlleh& r) {
+		auto& bg = lobbyData->backgrounds[r.bg];
 		int id = 0;
 
 		this->_machines.reserve(bg.arcades.size());
-		for (auto &arcade : bg.arcades) {
+		for (auto& arcade : bg.arcades) {
 			if (arcade.old)
 				this->_machines.emplace_back(
 					UINT32_MAX,
@@ -379,7 +386,7 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		}
 		id = 0;
 		this->_elevators.reserve(bg.elevators.size());
-		for (auto &elevator : bg.elevators)
+		for (auto& elevator : bg.elevators)
 			this->_elevators.emplace_back(
 				id++,
 				elevator.pos,
@@ -398,11 +405,11 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 			texId,
 			convertEncoding<char, wchar_t, UTF8Decode, UTF16Encode>(std::string(r.realName, strnlen(r.realName, sizeof(r.realName)))).c_str(),
 			lobbyData->getFont(16),
-			{200, 20},
+			{ 200, 20 },
 			&size
 		))
 			puts("Error creating text texture");
-		this->_extraPlayerData[r.id].name.texture.setHandle(texId, {200, 20});
+		this->_extraPlayerData[r.id].name.texture.setHandle(texId, { 200, 20 });
 		this->_extraPlayerData[r.id].name.setSize(size.to<unsigned>());
 		this->_extraPlayerData[r.id].name.rect.width = size.x;
 		this->_extraPlayerData[r.id].name.rect.height = size.y;
@@ -415,31 +422,32 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 #ifdef _DEBUG
 			this->_addMessageToList(DEBUG_COLOR, 0, "Your IPv6 Address is: " + getMyIpv6());
 #endif
-		} else
+		}
+		else
 			this->_addMessageToList(0xFFFF00, 0, "IPv6 not supported");
-	};
-	this->_connection->onError = [this](const std::string &msg){
+		};
+	this->_connection->onError = [this](const std::string& msg) {
 		this->_wasConnected = true;
 		this->_openMessageBox(38, msg, std::string("Internal Error"), MB_ICONERROR);
-	};
-	this->_connection->onImpMsg = [this](const std::string &msg){
+		};
+	this->_connection->onImpMsg = [this](const std::string& msg) {
 		this->_openMessageBox(23, msg, std::string("Notification from server"), MB_ICONINFORMATION);
-	};
-	this->_connection->onMsg = [this](int32_t channel, int32_t player, const std::string &msg){
+		};
+	this->_connection->onMsg = [this](int32_t channel, int32_t player, const std::string& msg) {
 		playSound(49);
 		this->_addMessageToList(channel, player, msg);
-	};
-	this->_connection->onConnectRequest = [this](const std::string &ip, unsigned short port, bool spectate){
+		};
+	this->_connection->onConnectRequest = [this](const std::string& ip, unsigned short port, bool spectate) {
 		printf("onConnectRequest %s %u %s\n", ip.c_str(), port, spectate ? "true" : "false");
 		playSound(57);
 		if (!checkIp(ip)) {
-			Lobbies::PacketArcadeLeave leave{0};
+			Lobbies::PacketArcadeLeave leave{ 0 };
 
 			this->_connection->send(&leave, sizeof(leave));
 			this->_addMessageToList(0xFF0000, 0, "Failed to connect: Your opponent's custom IP is invalid (" + ip + ")");
 			return;
 		}
-		this->_addMessageToList(0x00FF00, 0, strncmp(ip.c_str(), "127.127.", 8) ? "Connect via IPv4" :  "Connect via IPv6");
+		this->_addMessageToList(0x00FF00, 0, strncmp(ip.c_str(), "127.127.", 8) ? "Connect via IPv4" : "Connect via IPv6");
 #ifdef _DEBUG
 		this->_addMessageToList(DEBUG_COLOR, 0, "Connecting to " + ip + ":" + std::to_string(port) + (spectate ? " as spectator" : " as a player"));
 #endif
@@ -448,16 +456,16 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		else
 			this->_connection->getMe()->battleStatus = Lobbies::BATTLE_STATUS_PLAYING;
 
-		Lobbies::PacketBattleStatusUpdate packet{0, this->_connection->getMe()->battleStatus};
+		Lobbies::PacketBattleStatusUpdate packet{ 0, this->_connection->getMe()->battleStatus };
 
 		this->_connection->send(&packet, sizeof(packet));
 		this->_parent->joinHost(ip.c_str(), port, spectate);
-	};
-	this->_connection->onHostRequest = [this]{
+		};
+	this->_connection->onHostRequest = [this] {
 		if (SokuLib::sceneId != SokuLib::SCENE_TITLE)
 			return hostPort;
 
-		Lobbies::PacketBattleStatusUpdate packet{0, Lobbies::BATTLE_STATUS_PLAYING};
+		Lobbies::PacketBattleStatusUpdate packet{ 0, Lobbies::BATTLE_STATUS_PLAYING };
 
 		this->_connection->send(&packet, sizeof(packet));
 		playSound(57);
@@ -465,12 +473,12 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		if (this->_parent->choice == 0)
 			this->_startHosting();
 		return hostPort;
-	};
-	this->_connection->onArcadeEngage = [this](const Player &p, uint32_t id){
+		};
+	this->_connection->onArcadeEngage = [this](const Player& p, uint32_t id) {
 		if (id >= this->_machines.size() - 1)
 			return;
 
-		auto &machine = this->_machines[id];
+		auto& machine = this->_machines[id];
 
 		machine.mutex.lock();
 		machine.playerCount++;
@@ -481,23 +489,24 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 			machine.currentAnim = &lobbyData->arcades.select;
 			if (&p == this->_connection->getMe()) {
 				printf("Host pref %x\n", p.settings.hostPref);
-				if(this->_hostIsVisible){
+				if (this->_hostIsVisible) {
 					if (p.settings.hostPref & Lobbies::HOSTPREF_ACCEPT_HOSTLIST)
 						this->_startHosting();
 				}
 
 			}
-		} else if (machine.playerCount == 2) {
+		}
+		else if (machine.playerCount == 2) {
 			machine.animation = 0;
 			machine.animationCtr = 0;
 			machine.animIdle = false;
 			machine.currentAnim = &lobbyData->arcades.game[random() % lobbyData->arcades.game.size()];
 		}
 		machine.mutex.unlock();
-	};
-	this->_connection->onArcadeLeave = [this](const Player &p, uint32_t id){
+		};
+	this->_connection->onArcadeLeave = [this](const Player& p, uint32_t id) {
 		if (p.id == this->_connection->getMe()->id) {
-			Lobbies::PacketBattleStatusUpdate packet{0, Lobbies::BATTLE_STATUS_IDLE};
+			Lobbies::PacketBattleStatusUpdate packet{ 0, Lobbies::BATTLE_STATUS_IDLE };
 
 			this->_currentMachine = nullptr;
 			this->_connection->getMe()->battleStatus = Lobbies::BATTLE_STATUS_IDLE;
@@ -506,7 +515,7 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		if (id >= this->_machines.size() - 1)
 			return;
 
-		auto &machine = this->_machines[id];
+		auto& machine = this->_machines[id];
 
 		machine.mutex.lock();
 		machine.playerCount--;
@@ -515,15 +524,16 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 			machine.animationCtr = 0;
 			machine.animIdle = false;
 			machine.currentAnim = &lobbyData->arcades.select;
-		} else if (machine.playerCount == 0) {
+		}
+		else if (machine.playerCount == 0) {
 			machine.animIdle = true;
 			machine.animationCtr = 0;
 			machine.currentAnim = &lobbyData->arcades.intro;
 			machine.animation = machine.currentAnim->frameCount - 1;
 		}
 		machine.mutex.unlock();
-	};
-	this->_connectThread = std::thread{[this](){
+		};
+	this->_connectThread = std::thread{ [this]() {
 		for (int i = 0; i < lobbyJoinTries; i++) {
 			if (this->_disconnected)
 				return;
@@ -537,14 +547,14 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 		playSound(38);
 		this->_wasConnected = true;
 		MessageBox(SokuLib::window, "Failed to join lobby: Connection timed out.", "Timed out", MB_ICONERROR);
-	}};
+	} };
 	ptrMutex.lock();
 	activeMenu = this;
 	ptrMutex.unlock();
-	this->_messageBoxThread = std::thread{[this](){
+	this->_messageBoxThread = std::thread{ [this]() {
 		for (;; std::this_thread::sleep_for(std::chrono::milliseconds(100))) {
 			// * (char *)0x0089FFDC: is Soku still running
-			if (!*(char *)0x0089FFDC)
+			if (!*(char*)0x0089FFDC)
 				return;
 			this->_connection->meMutex.lock();
 			if (SokuLib::sceneId != SokuLib::SCENE_TITLE && this->_connection->getMe()->battleStatus == Lobbies::BATTLE_STATUS_WAITING) {
@@ -566,14 +576,14 @@ InLobbyMenu::InLobbyMenu(LobbyMenu *menu, SokuLib::MenuConnect *parent, std::sha
 				else
 					break;
 			}
-			const MessageBoxArgs &args = this->_messageBoxQueue.front();
+			const MessageBoxArgs& args = this->_messageBoxQueue.front();
 			playSound(args.sound);
 			MessageBox(SokuLib::window, args.text.c_str(), args.title.c_str(), args.type);
 			this->_messageBoxQueue.pop();
 		}
-	}};
+	} };
 	if (!Original_WndProc)
-		Original_WndProc = (WNDPROC) SetWindowLongPtr(SokuLib::window, GWLP_WNDPROC, (LONG_PTR) Hooked_WndProc);
+		Original_WndProc = (WNDPROC)SetWindowLongPtr(SokuLib::window, GWLP_WNDPROC, (LONG_PTR)Hooked_WndProc);
 }
 
 InLobbyMenu::~InLobbyMenu()
@@ -601,21 +611,22 @@ InLobbyMenu::~InLobbyMenu()
 
 void InLobbyMenu::_()
 {
-	*(int *)0x882a94 = 0x16;
+	*(int*)0x882a94 = 0x16;
 	if (this->_disconnected || !this->_connection->isInit() || !this->_connection->isConnected())
 		return;
 
-	Lobbies::PacketArcadeLeave leave{0};
-	Lobbies::PacketBattleStatusUpdate packet{0, Lobbies::BATTLE_STATUS_IDLE};
+	Lobbies::PacketArcadeLeave leave{ 0 };
+	Lobbies::PacketBattleStatusUpdate packet{ 0, Lobbies::BATTLE_STATUS_IDLE };
 
 	this->_connection->send(&packet, sizeof(packet));
 	this->_connection->send(&leave, sizeof(leave));
 	if (!this->_hostlist) {
 		this->_currentMachine = nullptr;
 		SokuLib::playBGM(this->_music.c_str());
-	} else
+	}
+	else
 		SokuLib::playBGM("data/bgm/op2.ogg");
-	*(*(char **)0x89a390 + 20) = false;
+	*(*(char**)0x89a390 + 20) = false;
 	this->_parent->choice = 0;
 	this->_parent->subchoice = 0;
 	this->_connection->meMutex.lock();
@@ -626,6 +637,7 @@ void InLobbyMenu::_()
 
 int InLobbyMenu::onProcess()
 {
+	//ES AQUÍ AAAA
 	if (this->_disconnected)
 		return false;
 	try {
@@ -651,7 +663,7 @@ int InLobbyMenu::onProcess()
 		memset(&SokuLib::inputMgrs.input, 0, sizeof(SokuLib::inputMgrs.input));
 		// We call MenuConnect::onProcess directly because we don't want to trigger any hook.
 		// After all, we are not technically inside the connect menu.
-		reinterpret_cast<void (__thiscall *)(SokuLib::MenuConnect *)>(0x449160)(this->_parent);
+		reinterpret_cast<void(__thiscall*)(SokuLib::MenuConnect*)>(0x449160)(this->_parent);
 		SokuLib::inputMgrs.input = inputs;
 		if (this->_hostlist && !this->_hostlist->update()) {
 			SokuLib::playBGM(this->_music.c_str());
@@ -665,18 +677,19 @@ int InLobbyMenu::onProcess()
 			if (this->_parent->subchoice == 5) { //Already Playing
 				this->_parent->notSpectateFlag = !this->_parent->notSpectateFlag;
 				this->_parent->join();
-			} else if (this->_parent->subchoice == 10) { //Connect Failed
-				Lobbies::PacketArcadeLeave leave{0};
+			}
+			else if (this->_parent->subchoice == 10) { //Connect Failed
+				Lobbies::PacketArcadeLeave leave{ 0 };
 
 				this->_connection->send(&leave, sizeof(leave));
 				if (!this->_hostlist)
 					this->_currentMachine = nullptr;
 
-				Lobbies::PacketBattleStatusUpdate packet{0, Lobbies::BATTLE_STATUS_IDLE};
+				Lobbies::PacketBattleStatusUpdate packet{ 0, Lobbies::BATTLE_STATUS_IDLE };
 
 				this->_connection->send(&packet, sizeof(packet));
 				me->battleStatus = Lobbies::BATTLE_STATUS_IDLE;
-				*(*(char **)0x89a390 + 20) = false;
+				*(*(char**)0x89a390 + 20) = false;
 				this->_addMessageToList(0xFF0000, 0, "Failed connecting to opponent: " + std::string(this->_parent->subchoice == 5 ? "They are already playing" : "Connection failed"));
 				this->_parent->choice = 0;
 				this->_parent->subchoice = 0;
@@ -692,17 +705,23 @@ int InLobbyMenu::onProcess()
 				if (this->_parent->choice == SokuLib::MenuConnect::CHOICE_HOST) {
 					memset(&SokuLib::inputMgrs.input, 0, sizeof(SokuLib::inputMgrs.input));
 					SokuLib::inputMgrs.input.b = 1;
-					reinterpret_cast<void (__thiscall *)(SokuLib::MenuConnect *)>(0x449160)(this->_parent);
+					reinterpret_cast<void(__thiscall*)(SokuLib::MenuConnect*)>(0x449160)(this->_parent);
 					SokuLib::inputMgrs.input = inputs;
 				}
 				this->_parent->choice = 0;
 				this->_parent->subchoice = 0;
 				return false;
-			} else
+			}
+			else
 				this->_editingText = false;
 		}
 
-		auto &bg = lobbyData->backgrounds[this->_background];
+		auto& bg = lobbyData->backgrounds[this->_background];
+
+		if (SokuLib::inputMgrs.input.c)
+		{
+			SokuLib::activateMenu(new LobbyOptions());
+		}
 
 		if (SokuLib::inputMgrs.input.changeCard) {
 			int amount = 16;
@@ -710,7 +729,7 @@ int InLobbyMenu::onProcess()
 			if (me->dir & 0b1111) {
 				me->dir &= 0b10000;
 
-				Lobbies::PacketMove m{0, me->dir};
+				Lobbies::PacketMove m{ 0, me->dir };
 
 				this->_connection->send(&m, sizeof(m));
 			}
@@ -733,13 +752,14 @@ int InLobbyMenu::onProcess()
 				this->_camera.y = 340;
 			else if (this->_camera.y > bg.size.y - 140)
 				this->_camera.y = bg.size.y - 140;
-		} else if (this->_currentElevator) {
+		}
+		else if (this->_currentElevator) {
 			bool elevatorChanged = false;
 
 			if (
 				this->_currentElevator->pos.x != me->pos.x ||
 				(this->_elevatorCtr != (this->_elevatorOut ? 0 : 30) && this->_currentElevator->state == 2)
-			) {
+				) {
 				int diff = me->pos.x - this->_currentElevator->pos.x;
 
 				if (std::abs(diff) <= PLAYER_H_SPEED)
@@ -750,7 +770,7 @@ int InLobbyMenu::onProcess()
 					me->dir &= 0b10000;
 					me->dir |= 0b00011;
 
-					Lobbies::PacketMove m{0, me->dir};
+					Lobbies::PacketMove m{ 0, me->dir };
 
 					this->_connection->send(&m, sizeof(m));
 				}
@@ -759,10 +779,11 @@ int InLobbyMenu::onProcess()
 					me->dir |= 0b10000;
 				else
 					me->dir &= 0b01111;
-			} else if (me->dir & 0b1111) {
+			}
+			else if (me->dir & 0b1111) {
 				me->dir &= 0b10000;
 
-				Lobbies::PacketMove m{0, me->dir};
+				Lobbies::PacketMove m{ 0, me->dir };
 
 				this->_connection->send(&m, sizeof(m));
 			}
@@ -780,21 +801,24 @@ int InLobbyMenu::onProcess()
 						playSound(0x27);
 						elevatorChanged = true;
 					}
-				} else if (SokuLib::inputMgrs.input.horizontalAxis == -1) {
+				}
+				else if (SokuLib::inputMgrs.input.horizontalAxis == -1) {
 					if (this->_currentElevator->links.leftLink) {
 						this->_currentPlatform = this->_currentElevator->links.leftLink->platform;
 						this->_currentElevator = &this->_elevators[this->_currentElevator->links.leftLink->elevator];
 						playSound(0x27);
 						elevatorChanged = true;
 					}
-				} else if (SokuLib::inputMgrs.input.verticalAxis == -1) {
+				}
+				else if (SokuLib::inputMgrs.input.verticalAxis == -1) {
 					if (this->_currentElevator->links.upLink) {
 						this->_currentPlatform = this->_currentElevator->links.upLink->platform;
 						this->_currentElevator = &this->_elevators[this->_currentElevator->links.upLink->elevator];
 						playSound(0x27);
 						elevatorChanged = true;
 					}
-				} else if (SokuLib::inputMgrs.input.verticalAxis == 1) {
+				}
+				else if (SokuLib::inputMgrs.input.verticalAxis == 1) {
 					if (this->_currentElevator->links.downLink) {
 						this->_currentPlatform = this->_currentElevator->links.downLink->platform;
 						this->_currentElevator = &this->_elevators[this->_currentElevator->links.downLink->elevator];
@@ -832,7 +856,8 @@ int InLobbyMenu::onProcess()
 						break;
 					}
 					this->_currentElevator->state = 3;
-				} else {
+				}
+				else {
 					if (this->_elevatorCtr > 0) {
 						this->_elevatorCtr--;
 						this->_zoom = 1 - (this->_elevatorCtr / 60.f);
@@ -847,9 +872,10 @@ int InLobbyMenu::onProcess()
 			default:
 				break;
 			}
-		} else if (!this->_currentMachine && !this->_editingText) {
+		}
+		else if (!this->_currentMachine && !this->_editingText) {
 			if (SokuLib::inputMgrs.input.a == 1) {
-				for (auto &machine : this->_machines) {
+				for (auto& machine : this->_machines) {
 					if (me->pos.x < machine.pos.x - machine.skin.sprite.getSize().x / 2)
 						continue;
 					if (me->pos.y < machine.pos.y)
@@ -861,9 +887,9 @@ int InLobbyMenu::onProcess()
 					this->_currentMachine = &machine;
 					playSound(0x28);
 					if (machine.id == UINT32_MAX) {
-						this->_hostlist.reset(new SmallHostlist(0.6, {128, 48}, this->_parent));
+						this->_hostlist.reset(new SmallHostlist(0.6, { 128, 48 }, this->_parent));
 						SokuLib::playBGM("data/bgm/op2.ogg");
-						for (auto &achievement : lobbyData->achievementByRequ["old_arcade"])
+						for (auto& achievement : lobbyData->achievementByRequ["old_arcade"])
 							if (!achievement->awarded) {
 								achievement->awarded = true;
 								lobbyData->achievementAwardQueue.push_back(achievement);
@@ -871,8 +897,8 @@ int InLobbyMenu::onProcess()
 						goto touched;
 					}
 
-					Lobbies::PacketGameRequest packet{machine.id};
-					Lobbies::PacketBattleStatusUpdate p{0, Lobbies::BATTLE_STATUS_WAITING};
+					Lobbies::PacketGameRequest packet{ machine.id };
+					Lobbies::PacketBattleStatusUpdate p{ 0, Lobbies::BATTLE_STATUS_WAITING };
 
 					me->battleStatus = Lobbies::BATTLE_STATUS_WAITING;
 					this->_connection->send(&packet, sizeof(packet));
@@ -880,7 +906,7 @@ int InLobbyMenu::onProcess()
 					goto touched;
 				}
 			touched:
-				for (auto &elevator : this->_elevators) {
+				for (auto& elevator : this->_elevators) {
 					if (me->pos.x < elevator.pos.x - elevator.skin.cage.width / 2)
 						continue;
 					if (me->pos.y < elevator.pos.y)
@@ -910,7 +936,7 @@ int InLobbyMenu::onProcess()
 				if (SokuLib::inputMgrs.input.horizontalAxis < 0)
 					newDir |= 0b10000;
 
-				auto &platform = bg.platforms[this->_currentPlatform];
+				auto& platform = bg.platforms[this->_currentPlatform];
 
 				if (me->pos.x <= platform.pos.x) {
 					newDir &= 0b11101;
@@ -920,7 +946,8 @@ int InLobbyMenu::onProcess()
 					newDir &= 0b11110;
 					me->pos.x = platform.pos.x + platform.width;
 				}
-			} else
+			}
+			else
 				newDir &= 0b11100;
 			if (SokuLib::inputMgrs.input.d == 0)
 				newDir &= ~0b100000;
@@ -929,20 +956,21 @@ int InLobbyMenu::onProcess()
 			me->pos.y = bg.platforms[this->_currentPlatform].pos.y;
 			if (newDir != me->dir) {
 				me->dir = newDir;
-				Lobbies::PacketMove l{0, me->dir};
+				Lobbies::PacketMove l{ 0, me->dir };
 				this->_connection->send(&l, sizeof(l));
 			}
-		} else {
+		}
+		else {
 			if (me->dir & 0b1111) {
 				me->dir &= 0b10000;
 
-				Lobbies::PacketMove m{0, me->dir};
+				Lobbies::PacketMove m{ 0, me->dir };
 
 				this->_connection->send(&m, sizeof(m));
 			}
 			if (SokuLib::inputMgrs.input.b == 1 && !this->_editingText && !this->_hostlist) {
-				Lobbies::PacketArcadeLeave l{0};
-				Lobbies::PacketBattleStatusUpdate p{0, Lobbies::BATTLE_STATUS_IDLE};
+				Lobbies::PacketArcadeLeave l{ 0 };
+				Lobbies::PacketBattleStatusUpdate p{ 0, Lobbies::BATTLE_STATUS_IDLE };
 
 				this->_connection->send(&p, sizeof(p));
 				this->_connection->send(&l, sizeof(l));
@@ -951,16 +979,17 @@ int InLobbyMenu::onProcess()
 				if (this->_parent->choice == SokuLib::MenuConnect::CHOICE_HOST) {
 					memset(&SokuLib::inputMgrs.input, 0, sizeof(SokuLib::inputMgrs.input));
 					SokuLib::inputMgrs.input.b = 1;
-					reinterpret_cast<void (__thiscall *)(SokuLib::MenuConnect *)>(0x449160)(this->_parent);
+					reinterpret_cast<void(__thiscall*)(SokuLib::MenuConnect*)>(0x449160)(this->_parent);
 					SokuLib::inputMgrs.input = inputs;
-				} else
+				}
+				else
 					playSound(0x29);
 				this->_parent->choice = 0;
 				this->_parent->subchoice = 0;
 				messageBox->active = false;
 			}
 		}
-		for (auto &machine : this->_machines) {
+		for (auto& machine : this->_machines) {
 			machine.mutex.lock();
 			if (machine.animIdle)
 				goto checkSkinAnim;
@@ -989,7 +1018,7 @@ int InLobbyMenu::onProcess()
 		done:
 			machine.mutex.unlock();
 		}
-		for (auto &elevator : this->_elevators) {
+		for (auto& elevator : this->_elevators) {
 			elevator.skinAnimationCtr += elevator.skin.frameRate;
 			if (elevator.skinAnimationCtr < 60)
 				goto checkAnim;
@@ -1031,7 +1060,8 @@ int InLobbyMenu::onProcess()
 		}
 		this->_playersCopy = this->_connection->getPlayers();
 		return true;
-	} catch (std::exception &e) {
+	}
+	catch (std::exception& e) {
 		MessageBoxA(
 			SokuLib::window,
 			(
@@ -1040,7 +1070,7 @@ int InLobbyMenu::onProcess()
 				"\n"
 				"Error:\n" +
 				std::string(e.what())
-			).c_str(),
+				).c_str(),
 			"SokuLobby error",
 			MB_ICONERROR
 		);
@@ -1057,25 +1087,25 @@ int InLobbyMenu::onRender()
 			this->_messageBox.draw();
 			this->_loadingText.draw();
 			this->_loadingGear.setRotation(-this->_loadingGear.getRotation());
-			this->_loadingGear.setPosition({412, 227});
+			this->_loadingGear.setPosition({ 412, 227 });
 			this->_loadingGear.draw();
 			this->_loadingGear.setRotation(-this->_loadingGear.getRotation());
-			this->_loadingGear.setPosition({412 + 23, 227 - 18});
+			this->_loadingGear.setPosition({ 412 + 23, 227 - 18 });
 			this->_loadingGear.draw();
 			return 0;
 		}
 
-		auto &bg = lobbyData->backgrounds[this->_background];
+		auto& bg = lobbyData->backgrounds[this->_background];
 
 		SokuLib::DrawUtils::RectangleShape rect2;
 #ifdef _DEBUG
 		SokuLib::DrawUtils::RectangleShape rect;
 
 		rect.setBorderColor(SokuLib::Color::White);
-		rect.setFillColor(SokuLib::Color{0xFF, 0xFF, 0xFF, 0xA0});
+		rect.setFillColor(SokuLib::Color{ 0xFF, 0xFF, 0xFF, 0xA0 });
 #endif
 		rect2.setBorderColor(SokuLib::Color::Black);
-		rect2.setFillColor(SokuLib::Color{0x00, 0x00, 0x00, 0xA0});
+		rect2.setFillColor(SokuLib::Color{ 0x00, 0x00, 0x00, 0xA0 });
 
 		auto oldTranslate = this->_translate;
 
@@ -1095,7 +1125,7 @@ int InLobbyMenu::onRender()
 		if (this->_translate.y < 480 - bg.size.y * this->_zoom)
 			this->_translate.y = 480 - bg.size.y * this->_zoom;
 
-		for (auto &layer : bg.layers) {
+		for (auto& layer : bg.layers) {
 			if (layer.type == LobbyData::LAYERTYPE_IMAGE) {
 				SokuLib::Vector2i tsize = {
 					static_cast<int>(layer.image->getSize().x * this->_zoom - 640),
@@ -1151,11 +1181,12 @@ int InLobbyMenu::onRender()
 						bg.clock->second->draw();
 						bg.clock->second->setSize(s);
 					}
-				} else
+				}
+				else
 					puts("Error");
 				continue;
 			}
-			for (auto &machine : this->_machines) {
+			for (auto& machine : this->_machines) {
 				SokuLib::Vector2i pos{
 					static_cast<int>(this->_translate.x + (machine.pos.x - machine.skin.sprite.getSize().x / 2) * this->_zoom),
 					static_cast<int>(this->_translate.y + (machine.pos.y - machine.skin.sprite.getSize().y) * this->_zoom)
@@ -1186,13 +1217,13 @@ int InLobbyMenu::onRender()
 
 				machine.mutex.unlock();
 			}
-			for (auto &elevator : this->_elevators) {
+			for (auto& elevator : this->_elevators) {
 				if (elevator.links.hidden)
 					continue;
 
 				SokuLib::Vector2i pos{
 					static_cast<int>(this->_translate.x + (elevator.pos.x - elevator.skin.cage.width / 2) * this->_zoom),
-					static_cast<int>(this->_translate.y + (elevator.pos.y - elevator.skin.cage.height) * this->_zoom )
+					static_cast<int>(this->_translate.y + (elevator.pos.y - elevator.skin.cage.height) * this->_zoom)
 				};
 
 				elevator.skin.sprite.rect = elevator.skin.cage;
@@ -1200,7 +1231,7 @@ int InLobbyMenu::onRender()
 				elevator.skin.sprite.setSize({
 					static_cast<unsigned>(elevator.skin.cage.width * this->_zoom),
 					static_cast<unsigned>(elevator.skin.cage.height * this->_zoom)
-				});
+					});
 				elevator.skin.sprite.rect.left += elevator.skinAnimation * elevator.skin.sprite.rect.width;
 				elevator.skin.sprite.draw();
 
@@ -1219,7 +1250,7 @@ int InLobbyMenu::onRender()
 				elevator.skin.sprite.setSize({
 					static_cast<unsigned>(elevator.skin.sprite.rect.width * this->_zoom),
 					static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-				});
+					});
 				elevator.skin.sprite.draw();
 
 				pos = posBase;
@@ -1231,7 +1262,7 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(elevator.skin.sprite.rect.width * this->_zoom),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
 
 					pos.x += (elevator.skin.arrow.width + 4) * this->_zoom;
@@ -1240,9 +1271,10 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(elevator.skin.sprite.rect.width * this->_zoom),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
-				} else if (elevator.links.upLink || elevator.links.downLink) {
+				}
+				else if (elevator.links.upLink || elevator.links.downLink) {
 					pos.x -= (elevator.skin.arrow.width / 2) * this->_zoom;
 					elevator.skin.sprite.rect = elevator.skin.arrow;
 					if (elevator.links.upLink)
@@ -1251,15 +1283,15 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(elevator.skin.sprite.rect.width * this->_zoom),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
 				}
 			}
-			for (auto &player : this->_playersCopy) {
+			for (auto& player : this->_playersCopy) {
 				if (std::find(this->_insideElevator.begin(), this->_insideElevator.end(), player.id) == this->_insideElevator.end())
 					continue;
 				if (player.player.avatar < lobbyData->avatars.size()) {
-					auto &avatar = lobbyData->avatars[player.player.avatar];
+					auto& avatar = lobbyData->avatars[player.player.avatar];
 
 					avatar.sprite.tint = SokuLib::Color::White;
 					avatar.sprite.rect.width = avatar.sprite.texture.getSize().x / avatar.nbAnimations;
@@ -1267,11 +1299,11 @@ int InLobbyMenu::onRender()
 					avatar.sprite.setSize({
 						static_cast<unsigned int>(avatar.sprite.rect.width * avatar.scale / (this->_elevatorCtr / ELEVEATOR_CTR_DIVIDER + 1)),
 						static_cast<unsigned int>(avatar.sprite.rect.height * avatar.scale / (this->_elevatorCtr / ELEVEATOR_CTR_DIVIDER + 1))
-					});
+						});
 					avatar.sprite.setPosition({
 						static_cast<int>(player.pos.x - avatar.sprite.getSize().x / 2),
 						static_cast<int>(player.pos.y - avatar.sprite.getSize().y)
-					});
+						});
 					avatar.sprite.rect.top = avatar.sprite.rect.height * player.animation;
 					avatar.sprite.rect.left = player.currentAnimation * avatar.sprite.rect.width;
 					if (this->_elevatorCtr >= 15) {
@@ -1321,35 +1353,36 @@ int InLobbyMenu::onRender()
 
 					avatar.sprite.setSize((avatar.sprite.getSize() * this->_zoom).to<unsigned>());
 					avatar.sprite.setPosition(((avatar.sprite.getPosition() * this->_zoom) + this->_translate).to<int>());
-				#ifdef _DEBUG
+#ifdef _DEBUG
 					extern bool debug;
 					if (debug) {
 						rect.setSize(avatar.sprite.getSize());
 						rect.setPosition(avatar.sprite.getPosition());
 						rect.draw();
 					}
-				#endif
+#endif
 					avatar.sprite.draw();
 					avatar.sprite.rect.width = avatar.sprite.texture.getSize().x / avatar.nbAnimations;
 					avatar.sprite.rect.height = avatar.sprite.texture.getSize().y / 2;
 					avatar.sprite.setSize({
 						static_cast<unsigned int>(avatar.sprite.rect.width * avatar.scale / (this->_elevatorCtr / ELEVEATOR_CTR_DIVIDER + 1)),
 						static_cast<unsigned int>(avatar.sprite.rect.height * avatar.scale / (this->_elevatorCtr / ELEVEATOR_CTR_DIVIDER + 1))
-					});
+						});
 					avatar.sprite.setPosition({
 						static_cast<int>(player.pos.x - avatar.sprite.getSize().x / 2),
 						static_cast<int>(player.pos.y - avatar.sprite.getSize().y)
-					});
-				} else {
-					rect2.setSize({static_cast<unsigned int>(64 * this->_zoom), static_cast<unsigned int>(64 * this->_zoom)});
+						});
+				}
+				else {
+					rect2.setSize({ static_cast<unsigned int>(64 * this->_zoom), static_cast<unsigned int>(64 * this->_zoom) });
 					rect2.setPosition({
 						static_cast<int>(this->_translate.x + (player.pos.x - 32) * this->_zoom),
 						static_cast<int>(this->_translate.y + (player.pos.y + 64) * this->_zoom)
-					});
+						});
 					rect2.draw();
 				}
 			}
-			for (auto &elevator : this->_elevators) {
+			for (auto& elevator : this->_elevators) {
 				if (elevator.links.hidden)
 					continue;
 				if (elevator.animation >= 30)
@@ -1369,7 +1402,7 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(elevator.skin.sprite.rect.width * this->_zoom),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
 
 					pos.x += elevator.skin.doorLeft.width * this->_zoom;
@@ -1380,9 +1413,10 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(std::ceil(elevator.skin.sprite.rect.width * this->_zoom)),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
-				} else if (elevator.skin.anim == LobbyData::DOOR_OPEN_ROTATE) {
+				}
+				else if (elevator.skin.anim == LobbyData::DOOR_OPEN_ROTATE) {
 					float angle = M_PI_2 * elevator.animation / 30;
 
 					pos += elevator.skin.doorOffset * this->_zoom;
@@ -1391,7 +1425,7 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(elevator.skin.sprite.rect.width * cos(angle) * this->_zoom),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
 
 					pos.x += (elevator.skin.doorLeft.width + elevator.skin.doorRight.width - elevator.skin.doorLeft.width * cos(angle)) * this->_zoom;
@@ -1400,16 +1434,16 @@ int InLobbyMenu::onRender()
 					elevator.skin.sprite.setSize({
 						static_cast<unsigned>(std::ceil(elevator.skin.sprite.rect.width * cos(angle) * this->_zoom)),
 						static_cast<unsigned>(elevator.skin.sprite.rect.height * this->_zoom)
-					});
+						});
 					elevator.skin.sprite.draw();
 				}
 			}
 
-			for (auto &player : this->_playersCopy) {
+			for (auto& player : this->_playersCopy) {
 				if (std::find(this->_insideElevator.begin(), this->_insideElevator.end(), player.id) != this->_insideElevator.end())
 					continue;
 				if (player.player.avatar < lobbyData->avatars.size()) {
-					auto &avatar = lobbyData->avatars[player.player.avatar];
+					auto& avatar = lobbyData->avatars[player.player.avatar];
 
 					avatar.sprite.tint = SokuLib::Color::White;
 					avatar.sprite.rect.width = avatar.sprite.texture.getSize().x / avatar.nbAnimations;
@@ -1417,39 +1451,40 @@ int InLobbyMenu::onRender()
 					avatar.sprite.setSize({
 						static_cast<unsigned int>(avatar.sprite.rect.width * avatar.scale * this->_zoom),
 						static_cast<unsigned int>(avatar.sprite.rect.height * avatar.scale * this->_zoom)
-					});
+						});
 					avatar.sprite.setPosition({
 						static_cast<int>(this->_translate.x + player.pos.x * this->_zoom - avatar.sprite.getSize().x / 2),
 						static_cast<int>(this->_translate.y + player.pos.y * this->_zoom - avatar.sprite.getSize().y)
-					});
+						});
 					avatar.sprite.rect.top = avatar.sprite.rect.height * player.animation;
 					avatar.sprite.rect.left = player.currentAnimation * avatar.sprite.rect.width;
 					avatar.sprite.setMirroring((player.dir & 0b10000) == 0, false);
-				#ifdef _DEBUG
+#ifdef _DEBUG
 					extern bool debug;
 					if (debug) {
 						rect.setSize(avatar.sprite.getSize());
 						rect.setPosition(avatar.sprite.getPosition());
 						rect.draw();
 					}
-				#endif
+#endif
 					avatar.sprite.draw();
 					if (player.battleStatus) {
-						auto &status = this->_battleStatus[player.battleStatus - 1];
+						auto& status = this->_battleStatus[player.battleStatus - 1];
 
 						status.setSize((status.texture.getSize() * this->_zoom).to<unsigned>());
 						status.setPosition({
 							static_cast<int>(this->_translate.x + player.pos.x * this->_zoom - status.getSize().x / 2),
 							static_cast<int>(this->_translate.y + player.pos.y * this->_zoom - avatar.sprite.getSize().y - status.getSize().y)
-						});
+							});
 						status.draw();
 					}
-				} else {
-					rect2.setSize({static_cast<unsigned int>(64 * this->_zoom), static_cast<unsigned int>(64 * this->_zoom)});
+				}
+				else {
+					rect2.setSize({ static_cast<unsigned int>(64 * this->_zoom), static_cast<unsigned int>(64 * this->_zoom) });
 					rect2.setPosition({
 						static_cast<int>(this->_translate.x + (player.pos.x - 64 / 2) * this->_zoom),
 						static_cast<int>(this->_translate.y + (player.pos.y - 64) * this->_zoom)
-					});
+						});
 					rect2.draw();
 				}
 			}
@@ -1458,8 +1493,8 @@ int InLobbyMenu::onRender()
 		std::vector<std::tuple<float, float, float>> lastTexts;
 
 		lastTexts.reserve(this->_playersCopy.size());
-		for (auto &player : this->_playersCopy) {
-			auto &name = this->_extraPlayerData[player.id].name;
+		for (auto& player : this->_playersCopy) {
+			auto& name = this->_extraPlayerData[player.id].name;
 			auto minPos = this->_translate.x + player.pos.x * this->_zoom - name.getSize().x / 2.f;
 			auto maxPos = this->_translate.x + player.pos.x * this->_zoom + name.getSize().x / 2.f;
 			auto posY = this->_translate.y + (player.pos.y - 120) * this->_zoom;
@@ -1467,7 +1502,7 @@ int InLobbyMenu::onRender()
 
 			do {
 				conflict = false;
-				for (auto &old: lastTexts) {
+				for (auto& old : lastTexts) {
 					if (std::get<1>(old) < minPos)
 						continue;
 					if (std::get<0>(old) > maxPos)
@@ -1484,7 +1519,7 @@ int InLobbyMenu::onRender()
 			name.setPosition({
 				static_cast<int>(minPos),
 				static_cast<int>(posY)
-			});
+				});
 			lastTexts.emplace_back(minPos, maxPos, posY);
 			name.draw();
 		}
@@ -1493,7 +1528,8 @@ int InLobbyMenu::onRender()
 			this->_renderMachineOverlay();
 		if (!this->_hostlist)
 			this->renderChat();
-	} catch (std::exception &e) {
+	}
+	catch (std::exception& e) {
 		MessageBoxA(
 			SokuLib::window,
 			(
@@ -1502,7 +1538,7 @@ int InLobbyMenu::onRender()
 				"\n"
 				"Error:\n" +
 				std::string(e.what())
-			).c_str(),
+				).c_str(),
 			"SokuLobby error",
 			MB_ICONERROR
 		);
@@ -1524,13 +1560,13 @@ void InLobbyMenu::_unhook()
 	this->_connection->onArcadeLeave = this->onArcadeLeave;
 }
 
-void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const std::string &msg)
+void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const std::string& msg)
 {
 	this->_chatTimer = 900;
 	std::list<Message> tmpChatMessages;
 	tmpChatMessages.emplace_front();
 
-	auto *m = &tmpChatMessages.front();
+	auto* m = &tmpChatMessages.front();
 	std::string line;
 	std::string word;
 	std::string token;
@@ -1540,21 +1576,21 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 	unsigned skip = 0;
 	unsigned short emoteId;
 	unsigned char emoteCtr = 0;
-	auto pushText = [&]{
+	auto pushText = [&] {
 		if (line.empty())
 			return;
 
 		m->text.emplace_back();
 
-		auto &txt = m->text.back();
+		auto& txt = m->text.back();
 		int texId = 0;
 
 		if (player == 0)
 			txt.sprite.tint = channel;
 		//txt.sprite.texture.createFromText(line.c_str(), this->_chatFont, {350, 300}, &txt.realSize);
-		if (!createTextTexture(texId, convertEncoding<char, wchar_t, UTF8Decode, UTF16Encode>(line).c_str(), this->_chatFont, {350, 300}, &txt.realSize))
+		if (!createTextTexture(texId, convertEncoding<char, wchar_t, UTF8Decode, UTF16Encode>(line).c_str(), this->_chatFont, { 350, 300 }, &txt.realSize))
 			puts("Error creating text texture");
-		txt.sprite.texture.setHandle(texId, {350, 300});
+		txt.sprite.texture.setHandle(texId, { 350, 300 });
 		txt.sprite.rect.width = txt.realSize.x;
 		txt.sprite.rect.height = txt.realSize.y;
 		txt.pos.x = startPos;
@@ -1563,13 +1599,13 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 		printf("Created sprite %x %i,%i %ux%u (%ux%u) %08x\n", texId, txt.pos.x, txt.pos.y, txt.realSize.x, txt.realSize.y, txt.sprite.texture.getSize().x, txt.sprite.texture.getSize().y, txt.sprite.tint.operator unsigned());
 		startPos = pos;
 		line.clear();
-	};
-	auto nextLine = [&]{
+		};
+	auto nextLine = [&] {
 		pushText();
 		tmpChatMessages.emplace_front();
 		m = &tmpChatMessages.front();
 		pos = 0;
-	};
+		};
 	size_t lastTokenSize = 0;
 
 	line.reserve(msg.size());
@@ -1590,21 +1626,24 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 				m->emotes.back().pos.x = startPos;
 				pos += EMOTE_SIZE;
 				startPos = pos;
-				for (auto &g : m->text)
+				for (auto& g : m->text)
 					g.pos.y = (g.realSize.y - EMOTE_SIZE) / 2;
 			}
-		} else if (skip) {
+		}
+		else if (skip) {
 			if ((c & 0b11000000) == 0x80) {
 				skip--;
 				token += c;
-			} else
+			}
+			else
 				skip = 0;
 			word += c;
 			if (skip != 0)
 				continue;
 			lastTokenSize = token.size();
 			wordPos += this->_getTextSize(UTF8Decode(token)[0]);
-		} else if (c == 1) {
+		}
+		else if (c == 1) {
 			line += word;
 			pos += wordPos;
 			wordPos = 0;
@@ -1613,7 +1652,8 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 			emoteId = 0;
 			emoteCtr = 2;
 			continue;
-		} else if (c == '\n') {
+		}
+		else if (c == '\n') {
 			line += word;
 			pos += wordPos;
 			word.clear();
@@ -1621,7 +1661,8 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 			nextLine();
 			startPos = 0;
 			continue;
-		} else if (c >= 0x80) {
+		}
+		else if (c >= 0x80) {
 			skip = c >= 0xC0;
 			skip += c >= 0xE0;
 			skip += c >= 0xF0;
@@ -1629,11 +1670,13 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 			token += c;
 			word += c;
 			continue;
-		} else if (isspace(c)) {
+		}
+		else if (isspace(c)) {
 			if (word.empty()) {
 				if (pos == 0)
 					continue;
-			} else {
+			}
+			else {
 				line += word;
 				pos += wordPos;
 				word.clear();
@@ -1642,7 +1685,8 @@ void InLobbyMenu::_addMessageToList(unsigned int channel, unsigned player, const
 			line += ' ';
 			lastTokenSize = 1;
 			pos += this->_getTextSize(' ');
-		} else {
+		}
+		else {
 			lastTokenSize = 1;
 			word += c;
 			wordPos += this->_getTextSize(c);
@@ -1679,7 +1723,7 @@ void InLobbyMenu::onKeyPressed(unsigned chr)
 		return;
 	this->_textMutex.lock();
 	if (this->_lastPressed && this->_textTimer == 0) {
-		std::basic_string<unsigned> s{&this->_lastPressed, &this->_lastPressed + 1};
+		std::basic_string<unsigned> s{ &this->_lastPressed, &this->_lastPressed + 1 };
 		auto result = UTF16Encode(s);
 
 		if (result.size() + this->_buffer.size() <= CHAT_CHARACTER_LIMIT) {
@@ -1687,7 +1731,8 @@ void InLobbyMenu::onKeyPressed(unsigned chr)
 			this->_updateTextCursor(this->_textCursorPosIndex + 1);
 			this->textChanged |= 1;
 			playSound(0x27);
-		} else
+		}
+		else
 			playSound(0x29);
 	}
 	this->_lastPressed = chr;
@@ -1699,7 +1744,7 @@ void InLobbyMenu::onKeyReleased()
 {
 	this->_textMutex.lock();
 	if (this->_lastPressed && this->_textTimer == 0) {
-		std::basic_string<unsigned> s{&this->_lastPressed, &this->_lastPressed + 1};
+		std::basic_string<unsigned> s{ &this->_lastPressed, &this->_lastPressed + 1 };
 		auto result = UTF16Encode(s);
 
 		if (result.size() + this->_buffer.size() <= CHAT_CHARACTER_LIMIT) {
@@ -1707,7 +1752,8 @@ void InLobbyMenu::onKeyReleased()
 			this->_updateTextCursor(this->_textCursorPosIndex + 1);
 			playSound(0x27);
 			this->textChanged |= 1;
-		} else
+		}
+		else
 			playSound(0x29);
 	}
 	this->_lastPressed = 0;
@@ -1770,9 +1816,10 @@ void InLobbyMenu::_inputBoxUpdate()
 		if (this->_timers[chatKey] == 0) {
 			if (this->immComposition.empty()) {
 				if (this->_buffer.size() != 1) {
-					this->_sendMessage(std::wstring{this->_buffer.begin(), this->_buffer.end() - 1});
+					this->_sendMessage(std::wstring{ this->_buffer.begin(), this->_buffer.end() - 1 });
 					playSound(0x28);
-				} else
+				}
+				else
 					playSound(0x29);
 				this->_editingText = false;
 				this->_chatOffset = 0;
@@ -1821,7 +1868,7 @@ void InLobbyMenu::_inputBoxUpdate()
 		if (this->_lastPressed) {
 			this->_textTimer++;
 			if (this->_textTimer == 1 || (this->_textTimer > 36 && this->_textTimer % 6 == 0)) {
-				std::basic_string<unsigned> s{&this->_lastPressed, &this->_lastPressed + 1};
+				std::basic_string<unsigned> s{ &this->_lastPressed, &this->_lastPressed + 1 };
 				auto result = UTF16Encode(s);
 
 				if (result.size() + this->_buffer.size() <= CHAT_CHARACTER_LIMIT) {
@@ -1829,7 +1876,8 @@ void InLobbyMenu::_inputBoxUpdate()
 					this->_updateTextCursor(this->_textCursorPosIndex + 1);
 					playSound(0x27);
 					this->textChanged |= 1;
-				} else
+				}
+				else
 					playSound(0x29);
 			}
 		}
@@ -1853,7 +1901,7 @@ void InLobbyMenu::_initInputBox()
 	this->textChanged = 3;
 	this->_updateCompositionSprite();
 
-	this->_textCursor.setPosition({CURSOR_STARTX, CURSOR_STARTY});
+	this->_textCursor.setPosition({ CURSOR_STARTX, CURSOR_STARTY });
 	this->_textCursorPosSize = 0;
 	this->_textCursorPosIndex = 0;
 	this->_textSprite[0].rect.left = 0;
@@ -1891,13 +1939,15 @@ void InLobbyMenu::_updateTextCursor(int pos)
 	if (newX > CURSOR_ENDX) {
 		//TODO
 		this->_textSprite[0].rect.left += newX - CURSOR_ENDX;
-		this->_textCursor.setPosition({CURSOR_ENDX, CURSOR_STARTY});
-	} else if (newX < CURSOR_STARTX) {
+		this->_textCursor.setPosition({ CURSOR_ENDX, CURSOR_STARTY });
+	}
+	else if (newX < CURSOR_STARTX) {
 		//TODO
 		this->_textSprite[0].rect.left += newX - CURSOR_STARTX;
-		this->_textCursor.setPosition({CURSOR_STARTX, CURSOR_STARTY});
-	} else
-		this->_textCursor.setPosition({newX, CURSOR_STARTY});
+		this->_textCursor.setPosition({ CURSOR_STARTX, CURSOR_STARTY });
+	}
+	else
+		this->_textCursor.setPosition({ newX, CURSOR_STARTY });
 	this->_textCursorPosIndex = pos;
 	this->_textCursorPosSize = computedSize;
 
@@ -1930,7 +1980,7 @@ const std::map<std::string, InLobbyMenu::Cmd> InLobbyMenu::_commands
 	{"hostlist", {"<enable or disable>", "Enables or disables your host being posted to hostlist", &InLobbyMenu::_hostlistCmd}},
 };
 
-std::vector<std::string> InLobbyMenu::_parseCommand(const std::string &msg)
+std::vector<std::string> InLobbyMenu::_parseCommand(const std::string& msg)
 {
 	std::string token;
 	std::vector<std::string> result;
@@ -1942,7 +1992,8 @@ std::vector<std::string> InLobbyMenu::_parseCommand(const std::string &msg)
 		if (esc) {
 			token += c;
 			esc = false;
-		} else if (c == '\\')
+		}
+		else if (c == '\\')
 			esc = true;
 		/*else if (c == '"' && !sq)
 			q = !q;
@@ -1959,7 +2010,7 @@ std::vector<std::string> InLobbyMenu::_parseCommand(const std::string &msg)
 	return result;
 }
 
-void InLobbyMenu::_processCommands(const std::string &msg)
+void InLobbyMenu::_processCommands(const std::string& msg)
 {
 	if (msg.empty())
 		return;
@@ -1972,25 +2023,26 @@ void InLobbyMenu::_processCommands(const std::string &msg)
 			parsed.erase(parsed.begin());
 			return (this->*it->second.callback)(parsed);
 		}
-	} catch (std::exception &e) {
+	}
+	catch (std::exception& e) {
 		this->_addMessageToList(0xFF0000, 0, std::string(e.what()));
 	}
 }
 
-void InLobbyMenu::_helpCmd(const std::vector<std::string> &args)
+void InLobbyMenu::_helpCmd(const std::vector<std::string>& args)
 {
 	if (!args.empty()) {
 		auto it = InLobbyMenu::_commands.find(args[0]);
 
 		if (it != InLobbyMenu::_commands.end())
-			return this->_addMessageToList(0x00FFFF, 0, "/" + it->first + " " + it->second.usage + ": " + it->second.description);
+			return this->_addMessageToList(0x00FFFF, 0, "!" + it->first + " " + it->second.usage + ": " + it->second.description);
 		return this->_addMessageToList(0x00FFFF, 0, "Unknown command");
 	}
 
 	std::string msg;
 
 	msg += "Available client commands:";
-	for (auto &cmd : InLobbyMenu::_commands) {
+	for (auto& cmd : InLobbyMenu::_commands) {
 		auto tmp = "/" + cmd.first + " " + cmd.second.usage;
 
 		if (msg.size() + tmp.size() < sizeof(Lobbies::PacketMessage::message))
@@ -2003,39 +2055,41 @@ void InLobbyMenu::_helpCmd(const std::vector<std::string> &args)
 	this->_addMessageToList(0x00FFFF, 0, msg);
 }
 
-void InLobbyMenu::_hostlistCmd(const std::vector<std::string> &msg)
+void InLobbyMenu::_hostlistCmd(const std::vector<std::string>& msg)
 {
-	if(msg.empty())
+	if (msg.empty())
 		return;
 	auto arg = msg[0];
-	if(arg.compare("enable") == 0)
+	if (arg.compare("enable") == 0)
 	{
 		this->_hostIsVisible = true;
 		this->_addMessageToList(0x00FFFF, 0, "Your games will be broadcasted to the hostlist");
-	}else if(arg.compare("disable") == 0)
+	}
+	else if (arg.compare("disable") == 0)
 	{
 		this->_hostIsVisible = false;
 		this->_addMessageToList(0x00FFFF, 0, "Your games won't be broadcasted to the hostlist");
 
-	}else
+	}
+	else
 	{
 		this->_addMessageToList(0xFF0000, 0, "Invalid argument. Only accepts enable and disable");
 	}
 }
 
-void InLobbyMenu::_setReservedCmd(const std::vector<std::string>&msg)
+void InLobbyMenu::_setReservedCmd(const std::vector<std::string>& msg)
 {
 	this->_hostIsReserved = true;
 	this->_addMessageToList(0x00FFFF, 0, "Your host will appear as reserved now");
 }
 
-void  InLobbyMenu::_setAnyCmd(const std::vector<std::string> &msg)
+void  InLobbyMenu::_setAnyCmd(const std::vector<std::string>& msg)
 {
 	this->_hostIsReserved = false;
 	this->_addMessageToList(0x00FFFF, 0, "Your host won't appear as reserved anymore");
 }
 
-void InLobbyMenu::_sendMessage(const std::wstring &msg)
+void InLobbyMenu::_sendMessage(const std::wstring& msg)
 {
 	//editar acá
 	std::string encoded;
@@ -2058,12 +2112,14 @@ void InLobbyMenu::_sendMessage(const std::wstring &msg)
 				token += L':';
 				token += currentEmote;
 				token += L':';
-			} else if (lobbyData->isLocked(*it->second)) {
+			}
+			else if (lobbyData->isLocked(*it->second)) {
 				this->_addMessageToList(0xAFAFAF, 0, "You can't use :" + convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(currentEmote) + ": because you didn't unlock it.");
 				token += L':';
 				token += currentEmote;
 				token += L':';
-			} else {
+			}
+			else {
 				auto nb = it->second->id;
 
 				encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(token);
@@ -2075,13 +2131,14 @@ void InLobbyMenu::_sendMessage(const std::wstring &msg)
 				token.clear();
 			}
 			currentEmote.clear();
-		} else
+		}
+		else
 			(colon ? currentEmote : token) += c;
 	}
 	encoded += convertEncoding<wchar_t, char, UTF16Decode, UTF8Encode>(token);
 
 	//Ver si es un comando
-	if(encoded[0]== '!')
+	if (encoded[0] == '!')
 	{
 		this->_processCommands(encoded);
 		return;
@@ -2096,14 +2153,14 @@ void InLobbyMenu::_sendMessage(const std::wstring &msg)
 
 	if (
 		pos != std::string::npos &&
-		(pos == 0 || !isalpha(encoded[pos-1])) &&
+		(pos == 0 || !isalpha(encoded[pos - 1])) &&
 		(pos + 3 == encoded.size() - 1 || !isalpha(encoded[pos + 3]))
-	) {
+		) {
 		encoded.erase(encoded.begin() + pos, encoded.begin() + pos + 3);
 		encoded.insert(pos, "GGs, thanks for the games. It was very nice playing with you, let's play again later");
 	}
 
-	Lobbies::PacketMessage msgPacket{0, 0, encoded};
+	Lobbies::PacketMessage msgPacket{ 0, 0, encoded };
 
 	this->_connection->send(&msgPacket, sizeof(msgPacket));
 }
@@ -2125,10 +2182,10 @@ void InLobbyMenu::updateChat(bool inGame)
 		this->_chatSeat.tint.a = alpha;
 
 		auto remaining = this->_chatOffset;
-		SokuLib::Vector2i pos{292, 180};
+		SokuLib::Vector2i pos{ 292, 180 };
 
 		std::lock_guard<std::mutex> lock(this->_chatMessagesMutex);
-		for (auto &msg : this->_chatMessages) {
+		for (auto& msg : this->_chatMessages) {
 			if (pos.y <= 3) {
 				msg.farUp = true;
 				break;
@@ -2138,7 +2195,7 @@ void InLobbyMenu::updateChat(bool inGame)
 
 			msg.farUp = false;
 			msg.farDown = true;
-			for (auto &text : msg.text) {
+			for (auto& text : msg.text) {
 				if (remaining <= text.realSize.y - text.pos.y) {
 					auto p = pos;
 
@@ -2148,11 +2205,12 @@ void InLobbyMenu::updateChat(bool inGame)
 						p.y += min(0, text.pos.y + static_cast<int>(remaining));
 					this->_updateMessageSprite(p, remaining < -text.pos.y ? 0 : remaining + text.pos.y, text.realSize, text.sprite, alpha);
 					msg.farDown = false;
-				} else
+				}
+				else
 					text.sprite.tint.a = 0;
 				maxSize = max(maxSize, text.realSize.y);
 			}
-			for (auto &emote : msg.emotes) {
+			for (auto& emote : msg.emotes) {
 				emote.offset = pos;
 				emote.cutRemain = remaining;
 			}
@@ -2176,12 +2234,12 @@ void InLobbyMenu::renderChat()
 		this->_chatSeat.draw();
 
 		std::lock_guard<std::mutex> lock(this->_chatMessagesMutex);
-		for (auto &msg: this->_chatMessages) {
+		for (auto& msg : this->_chatMessages) {
 			if (msg.farUp)
 				break;
 			if (msg.farDown)
 				continue;
-			for (auto &text : msg.text) {
+			for (auto& text : msg.text) {
 				//SokuLib::SpriteEx s;
 				//auto handle = text.sprite.texture.releaseHandle();
 
@@ -2204,8 +2262,8 @@ void InLobbyMenu::renderChat()
 				//reinterpret_cast<void(__fastcall*)(int, int, int)>(0x404b80)(0x896b4c, 0, 1);
 				text.sprite.draw();
 			}
-			for (auto &emote : msg.emotes) {
-				auto &emoteObj = lobbyData->emotes[emote.id < lobbyData->emotes.size() ? emote.id : 0];
+			for (auto& emote : msg.emotes) {
+				auto& emoteObj = lobbyData->emotes[emote.id < lobbyData->emotes.size() ? emote.id : 0];
 				auto pos = emote.pos + emote.offset;
 
 				emoteObj.sprite.tint.a = this->_chatSeat.tint.a;
@@ -2217,17 +2275,17 @@ void InLobbyMenu::renderChat()
 					emoteObj.sprite.rect.top = 3 - pos.y;
 					pos.y = 3;
 				}
-				emoteObj.sprite.setSize({EMOTE_SIZE, static_cast<unsigned int>(emoteObj.sprite.rect.height)});
+				emoteObj.sprite.setSize({ EMOTE_SIZE, static_cast<unsigned int>(emoteObj.sprite.rect.height) });
 				emoteObj.sprite.setPosition(pos);
 				emoteObj.sprite.draw();
 			}
 		}
 	}
 	if (this->_editingText) {
-		for (auto &sprite : this->_textSprite) {
+		for (auto& sprite : this->_textSprite) {
 			//SokuLib::SpriteEx s;
 			//auto handle = sprite.texture.releaseHandle();
-	
+
 			//sprite.texture.setHandle(handle, sprite.texture.getSize());
 			//s.setTexture(
 			//	handle,
@@ -2256,7 +2314,7 @@ bool InLobbyMenu::isInputing()
 	return this->_editingText;
 }
 
-void InLobbyMenu::_updateMessageSprite(SokuLib::Vector2i pos, unsigned int remaining, SokuLib::Vector2i realSize, SokuLib::DrawUtils::Sprite &sprite, unsigned char alpha)
+void InLobbyMenu::_updateMessageSprite(SokuLib::Vector2i pos, unsigned int remaining, SokuLib::Vector2i realSize, SokuLib::DrawUtils::Sprite& sprite, unsigned char alpha)
 {
 	sprite.tint.a = alpha;
 	sprite.rect.top = 0;
@@ -2271,7 +2329,7 @@ void InLobbyMenu::_updateMessageSprite(SokuLib::Vector2i pos, unsigned int remai
 	sprite.setSize({
 		static_cast<unsigned int>(sprite.rect.width),
 		static_cast<unsigned int>(sprite.rect.height)
-	});
+		});
 	sprite.setPosition(pos);
 }
 
@@ -2327,7 +2385,7 @@ constexpr uint8_t GRCN6_SWR[16] = {
 	0x8D, 0x7C, 0xA1, 0x92,
 	0x31, 0x34, 0x72, 0x95
 };
-const uint8_t *versions[] = {
+const uint8_t* versions[] = {
 	VN,
 	SR_SWR,
 	VN_SWR,
@@ -2336,7 +2394,7 @@ const uint8_t *versions[] = {
 	GR6_SWR,
 	GRCN6_SWR,
 };
-const char * const versionNames[] = { "-SWR", "+SR", "Vanilla", "+GR", "+GR-62FPS", "+GR0.6", "+GR0.6-62FPS" };
+const char* const versionNames[] = { "-SWR", "+SR", "Vanilla", "+GR", "+GR-62FPS", "+GR0.6", "+GR0.6-62FPS" };
 
 void InLobbyMenu::_startHosting()
 {
@@ -2345,63 +2403,66 @@ void InLobbyMenu::_startHosting()
 	this->_parent->setupHost(hostPort, true);
 	if (this->_hostThread.joinable())
 		this->_hostThread.join();
-	this->_hostThread = std::thread{[this, ranked]{
+	this->_hostThread = std::thread{ [this, ranked] {
 		std::string converted;
-		const char * ip;
+		const char* ip;
 		try {
 			ip = getMyIp();
-		} catch (std::exception &e) {
-			this->_addMessageToList(0xFF0000, 0, std::string("Failed to get public IP: ") + e.what());
-			return;
 		}
-
-		unsigned short port = hostPort;
-		auto dup = strdup(ip);
-		char *pos = strchr(dup, ':');
-		std::string name;
-
-		for (int i = 0; i < sizeof(versionNames) / sizeof(*versionNames); i++) {
-			if (memcmp(versions[i], (unsigned char *)0x858B80, 16) == 0) {
-				name = versionNames[i];
-				break;
-			}
-		}
-		if (name.empty())
-			name = "+???";
-
-		if (pos) {
-			try {
-				port = std::stoul(pos + 1);
-			} catch (std::exception &e) {
-				puts(e.what());
-			}
-			*pos = 0;
-		}
-		auto hostMsg = this->_hostIsReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
-		printf("Putting hostlist %s:%u\n", dup, port);
-		th123intl::ConvertCodePage(th123intl::GetTextCodePage(), SokuLib::profile1.name.operator std::string(), CP_UTF8, converted);
-		nlohmann::json data = {
-			{"profile_name", converted},
-			{"message", hostMsg},
-			{"host", dup},
-			{"port", port}
-		};
-
-		free(dup);
-		try {
-			lobbyData->httpRequest("https://konni.delthas.fr/games", "PUT", data.dump());
-			this->_addMessageToList(0x00FF00, 0, "Broadcast to hostlist successful");
-		} catch (std::exception &e) {
-			this->_addMessageToList(0xFF0000, 0, "Hostlist error: " + std::string(e.what()));
-		}
-	}};
+ catch (std::exception& e) {
+  this->_addMessageToList(0xFF0000, 0, std::string("Failed to get public IP: ") + e.what());
+  return;
 }
 
-void InLobbyMenu::addString(wchar_t *str, size_t size)
+unsigned short port = hostPort;
+auto dup = strdup(ip);
+char* pos = strchr(dup, ':');
+std::string name;
+
+for (int i = 0; i < sizeof(versionNames) / sizeof(*versionNames); i++) {
+	if (memcmp(versions[i], (unsigned char*)0x858B80, 16) == 0) {
+		name = versionNames[i];
+		break;
+	}
+}
+if (name.empty())
+	name = "+???";
+
+if (pos) {
+	try {
+		port = std::stoul(pos + 1);
+	}
+catch (std::exception& e) {
+ puts(e.what());
+}
+*pos = 0;
+}
+auto hostMsg = this->_hostIsReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
+printf("Putting hostlist %s:%u\n", dup, port);
+th123intl::ConvertCodePage(th123intl::GetTextCodePage(), SokuLib::profile1.name.operator std::string(), CP_UTF8, converted);
+nlohmann::json data = {
+	{"profile_name", converted},
+	{"message", hostMsg},
+	{"host", dup},
+	{"port", port}
+};
+
+free(dup);
+try {
+	lobbyData->httpRequest("https://konni.delthas.fr/games", "PUT", data.dump());
+	this->_addMessageToList(0x00FF00, 0, "Broadcast to hostlist successful");
+}
+catch (std::exception& e) {
+ this->_addMessageToList(0xFF0000, 0, "Hostlist error: " + std::string(e.what()));
+}
+} };
+}
+
+void InLobbyMenu::addString(wchar_t* str, size_t size)
 {
 	this->_textMutex.lock();
 
-	std::wstring result{str, str + size};
+	std::wstring result{ str, str + size };
 	auto base = UTF16Decode(result);
 
 	this->_buffer.insert(this->_buffer.begin() + this->_textCursorPosIndex, str, str + size);
@@ -2415,7 +2476,7 @@ void InLobbyMenu::addString(wchar_t *str, size_t size)
 
 void InLobbyMenu::_updateCompositionSprite()
 {
-	auto cb = [this]{
+	auto cb = [this] {
 		int ret;
 
 		if (this->textChanged & 1) {
@@ -2423,8 +2484,8 @@ void InLobbyMenu::_updateCompositionSprite()
 				puts("Error creating text texture");
 			this->_textSprite[0].texture.setHandle(ret, BOX_TEXTURE_SIZE);
 		}
-		this->textChanged = false;	
-	};
+		this->textChanged = false;
+		};
 
 	if (
 		(SokuLib::mainMode == SokuLib::BATTLE_MODE_VSSERVER || SokuLib::mainMode == SokuLib::BATTLE_MODE_VSCLIENT) &&
@@ -2435,9 +2496,9 @@ void InLobbyMenu::_updateCompositionSprite()
 			SokuLib::newSceneId == SokuLib::SCENE_BATTLE ||
 			SokuLib::newSceneId == SokuLib::SCENE_BATTLECL ||
 			SokuLib::newSceneId == SokuLib::SCENE_BATTLESV
+			)
 		)
-	)
-		std::thread{cb}.join();
+		std::thread{ cb }.join();
 	else
 		cb();
 }
@@ -2455,13 +2516,13 @@ int InLobbyMenu::_getTextSize(unsigned int i)
 	if (it != this->_textSize.end())
 		return it->second;
 
-	int size = getTextSize(UTF16Encode(std::basic_string<unsigned>(&i, &i + 1)).c_str(), this->_chatFont, {32, 20}).x;
+	int size = getTextSize(UTF16Encode(std::basic_string<unsigned>(&i, &i + 1)).c_str(), this->_chatFont, { 32, 20 }).x;
 
 	this->_textSize[i] = size;
 	return size;
 }
 
-InLobbyMenu::ArcadeMachine::ArcadeMachine(unsigned id, SokuLib::Vector2i pos, LobbyData::ArcadeAnimation *currentAnim, LobbyData::ArcadeSkin &skin):
+InLobbyMenu::ArcadeMachine::ArcadeMachine(unsigned id, SokuLib::Vector2i pos, LobbyData::ArcadeAnimation* currentAnim, LobbyData::ArcadeSkin& skin) :
 	id(id),
 	pos(pos),
 	currentAnim(currentAnim),
@@ -2469,14 +2530,14 @@ InLobbyMenu::ArcadeMachine::ArcadeMachine(unsigned id, SokuLib::Vector2i pos, Lo
 {
 }
 
-InLobbyMenu::ArcadeMachine::ArcadeMachine(const InLobbyMenu::ArcadeMachine &):
+InLobbyMenu::ArcadeMachine::ArcadeMachine(const InLobbyMenu::ArcadeMachine&) :
 	skin(*(LobbyData::ArcadeSkin*)nullptr)
 {
 	puts("ArcadeMachine(const InLobbyMenu::ArcadeMachine &)");
 	assert(false);
 }
 
-InLobbyMenu::ElevatorMachine::ElevatorMachine(unsigned id, SokuLib::Vector2i pos, LobbyData::ElevatorPlacement &links, LobbyData::ElevatorSkin &skin):
+InLobbyMenu::ElevatorMachine::ElevatorMachine(unsigned id, SokuLib::Vector2i pos, LobbyData::ElevatorPlacement& links, LobbyData::ElevatorSkin& skin) :
 	id(id),
 	pos(pos),
 	skin(skin),
@@ -2484,9 +2545,9 @@ InLobbyMenu::ElevatorMachine::ElevatorMachine(unsigned id, SokuLib::Vector2i pos
 {
 }
 
-InLobbyMenu::ElevatorMachine::ElevatorMachine(const InLobbyMenu::ElevatorMachine &):
+InLobbyMenu::ElevatorMachine::ElevatorMachine(const InLobbyMenu::ElevatorMachine&) :
 	skin(*(LobbyData::ElevatorSkin*)nullptr),
-	links(*(LobbyData::ElevatorPlacement *)nullptr)
+	links(*(LobbyData::ElevatorPlacement*)nullptr)
 {
 	puts("ElevatorMachine(const InLobbyMenu::ElevatorMachine &)");
 	assert(false);
