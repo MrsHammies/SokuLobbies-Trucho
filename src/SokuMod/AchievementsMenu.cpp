@@ -66,7 +66,6 @@ AchievementsMenu::AchievementsMenu()
 		});
 		this->_messageBox.rect.width = this->_messageBox.texture.getSize().x;
 		this->_messageBox.rect.height = this->_messageBox.texture.getSize().y;
-		this->_messageBox.rect.height = this->_messageBox.texture.getSize().y;
 		this->_messageBox.setPosition({155, 203});
 #ifndef _DEBUG
 		return;

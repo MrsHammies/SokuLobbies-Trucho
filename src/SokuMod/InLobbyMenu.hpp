@@ -162,13 +162,11 @@ private:
 	std::vector<std::string> _parseCommand(const std::string &msg);
 	void _processCommands(const std::string& msg);
 	static const std::map<std::string, Cmd> _commands;
-	void _setReservedCmd(const std::vector<std::string> &msg);
-	void _setAnyCmd(const std::vector<std::string> &msg);
-	void _helpCmd(const std::vector<std::string> &args);
-	void _hostlistCmd(const std::vector<std::string> &msg);
-	//Client settings
-	bool _hostIsReserved = false;
-	bool _hostIsVisible = true; 
+	void _helpCmd(const std::vector<std::string> &args);	
+
+	//preferences
+	LobbyData::Preferences _preferences; 
+	void _updatePreferences(); 
 
 public:
 	char textChanged = 0;

@@ -48,7 +48,6 @@ private:
 	void _grantStatsAchievements();
 	void _grantCrashAchievements();
 	void _grantDebugAchievements();
-
 	static size_t LobbyData::writeMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 
 	std::map<unsigned, SokuLib::SWRFont> _fonts;
@@ -235,6 +234,12 @@ public:
 		std::string cardName;
 	};
 
+	struct Preferences {
+		bool isRanked;
+		bool postToHostlist;
+		bool isReserved;
+	};
+
 	bool achievementsLocked = false;
 	ArcadeData arcades;
 	AchievementHolder achHolder;
@@ -262,8 +267,11 @@ public:
 	SokuLib::SWRFont &getFont(unsigned size);
 	void saveAchievements();
 	void saveStats();
+	void savePreferences(Preferences& preferences); 
+	void loadPreferences(Preferences& preferences);
 	void update();
 	void render();
+
 };
 
 extern std::unique_ptr<LobbyData> lobbyData;

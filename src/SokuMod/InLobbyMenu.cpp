@@ -250,7 +250,7 @@ InLobbyMenu::InLobbyMenu(LobbyMenu* menu, SokuLib::MenuConnect* parent, std::sha
 {
 	SokuLib::FontDescription desc;
 	bool hasEnglishPatch = (*(int*)0x411c64 == 1);
-
+	_updatePreferences(); 
 	desc.r1 = 255;
 	desc.r2 = 255;
 	desc.g1 = 255;
@@ -489,11 +489,15 @@ InLobbyMenu::InLobbyMenu(LobbyMenu* menu, SokuLib::MenuConnect* parent, std::sha
 			machine.currentAnim = &lobbyData->arcades.select;
 			if (&p == this->_connection->getMe()) {
 				printf("Host pref %x\n", p.settings.hostPref);
-				if (this->_hostIsVisible) {
-					if (p.settings.hostPref & Lobbies::HOSTPREF_ACCEPT_HOSTLIST)
-						this->_startHosting();
+				this->_updatePreferences();
+				auto ranked = this->_preferences.isRanked ? 1 : 0;
+				std::string options = this->_preferences.isRanked ? "RANKED " : "CASUAL ";
+				options += this->_preferences.isReserved ? "RESERVED " : "NOT-RESERVED ";
+				options += this->_preferences.postToHostlist ? "VISIBLE" : "HIDDEN ";
+				this->_addMessageToList(0x00FF00, 0, std::string("Starting host: " + options));
+				if (this->_preferences.postToHostlist) {
+					this->_startHosting();
 				}
-
 			}
 		}
 		else if (machine.playerCount == 2) {
@@ -637,7 +641,6 @@ void InLobbyMenu::_()
 
 int InLobbyMenu::onProcess()
 {
-	//ES AQUÍ AAAA
 	if (this->_disconnected)
 		return false;
 	try {
@@ -1975,9 +1978,6 @@ void InLobbyMenu::_updateTextCursor(int pos)
 const std::map<std::string, InLobbyMenu::Cmd> InLobbyMenu::_commands
 {
 	{"help",    {"[command]", "Displays list of client commands.\nExample:\n/help\n/help help", &InLobbyMenu::_helpCmd}},
-	{"reserved", {"", "Set your host as reserved", &InLobbyMenu::_setReservedCmd}},
-	{"any",	     {"", "Set your host as open for anyone", &InLobbyMenu::_setAnyCmd}},
-	{"hostlist", {"<enable or disable>", "Enables or disables your host being posted to hostlist", &InLobbyMenu::_hostlistCmd}},
 };
 
 std::vector<std::string> InLobbyMenu::_parseCommand(const std::string& msg)
@@ -2053,40 +2053,6 @@ void InLobbyMenu::_helpCmd(const std::vector<std::string>& args)
 		}
 	}
 	this->_addMessageToList(0x00FFFF, 0, msg);
-}
-
-void InLobbyMenu::_hostlistCmd(const std::vector<std::string>& msg)
-{
-	if (msg.empty())
-		return;
-	auto arg = msg[0];
-	if (arg.compare("enable") == 0)
-	{
-		this->_hostIsVisible = true;
-		this->_addMessageToList(0x00FFFF, 0, "Your games will be broadcasted to the hostlist");
-	}
-	else if (arg.compare("disable") == 0)
-	{
-		this->_hostIsVisible = false;
-		this->_addMessageToList(0x00FFFF, 0, "Your games won't be broadcasted to the hostlist");
-
-	}
-	else
-	{
-		this->_addMessageToList(0xFF0000, 0, "Invalid argument. Only accepts enable and disable");
-	}
-}
-
-void InLobbyMenu::_setReservedCmd(const std::vector<std::string>& msg)
-{
-	this->_hostIsReserved = true;
-	this->_addMessageToList(0x00FFFF, 0, "Your host will appear as reserved now");
-}
-
-void  InLobbyMenu::_setAnyCmd(const std::vector<std::string>& msg)
-{
-	this->_hostIsReserved = false;
-	this->_addMessageToList(0x00FFFF, 0, "Your host won't appear as reserved anymore");
 }
 
 void InLobbyMenu::_sendMessage(const std::wstring& msg)
@@ -2396,10 +2362,9 @@ const uint8_t* versions[] = {
 };
 const char* const versionNames[] = { "-SWR", "+SR", "Vanilla", "+GR", "+GR-62FPS", "+GR0.6", "+GR0.6-62FPS" };
 
-void InLobbyMenu::_startHosting()
-{
-	auto ranked = this->_connection->getMe()->settings.hostPref & Lobbies::HOSTPREF_PREFER_RANKED;
-
+void InLobbyMenu::_startHosting(){
+	this->_updatePreferences();
+	auto ranked = this->_preferences.isRanked ? 1 : 0;
 	this->_parent->setupHost(hostPort, true);
 	if (this->_hostThread.joinable())
 		this->_hostThread.join();
@@ -2437,7 +2402,7 @@ catch (std::exception& e) {
 }
 *pos = 0;
 }
-auto hostMsg = this->_hostIsReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
+auto hostMsg = this->_preferences.isReserved ? "[RESERVED] " + this->_roomName : "[" + name + "] SokuLobbies " + std::string(modVersion) + ": Waiting in " + this->_roomName + " | " + (ranked ? "ranked" : "casual");
 printf("Putting hostlist %s:%u\n", dup, port);
 th123intl::ConvertCodePage(th123intl::GetTextCodePage(), SokuLib::profile1.name.operator std::string(), CP_UTF8, converted);
 nlohmann::json data = {
@@ -2552,3 +2517,8 @@ InLobbyMenu::ElevatorMachine::ElevatorMachine(const InLobbyMenu::ElevatorMachine
 	puts("ElevatorMachine(const InLobbyMenu::ElevatorMachine &)");
 	assert(false);
 }
+
+void InLobbyMenu::_updatePreferences()
+{
+	lobbyData->loadPreferences(this->_preferences);	
+};

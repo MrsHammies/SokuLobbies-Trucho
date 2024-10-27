@@ -161,6 +161,34 @@ void LobbyData::_loadGameCards()
 	loadTexture(cardsTextures[SokuLib::CHARACTER_RANDOM][301], "data/battle/cardFaceDown.bmp");
 }
 
+void LobbyData::loadPreferences(Preferences& preferences) 
+{
+	std::ifstream stream{ std::filesystem::path(profileFolderPath) / "preferences.dat", std::fstream::binary};
+
+	if (stream.fail())
+	{
+		Preferences initPreferences = { true, true, false };
+		this->savePreferences(initPreferences);
+		this->loadPreferences(preferences);
+	}
+	else 
+	{
+		stream.read(reinterpret_cast<char*>(&preferences), sizeof(LobbyData::Preferences));
+	}
+	stream.close();
+}
+
+void LobbyData::savePreferences(LobbyData::Preferences& preferences)
+{
+	std::filesystem::path folder = profileFolderPath;
+	std::ofstream stream{ folder / "preferences.dat", std::fstream::binary };
+	auto pref = reinterpret_cast<char*>(&preferences);
+	if (stream) {
+		stream.write(pref, sizeof(LobbyData::Preferences));
+		stream.close();
+	}
+}
+
 void LobbyData::_loadAvatars()
 {
 	std::filesystem::path folder = profileFolderPath;
