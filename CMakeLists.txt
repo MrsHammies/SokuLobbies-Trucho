@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+﻿cmake_minimum_required(VERSION 3.15)
 project(SokuLobbies)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -28,7 +28,7 @@ if (ASAN)
 endif ()
 
 include_directories(src/Common)
-find_package(SFML)
+find_package(SFML COMPONENTS system network)
 
 add_executable(
 	SokuLobbiesMainServer
@@ -38,8 +38,7 @@ add_executable(
 	src/Common/GuardedMutex.cpp
 	src/Common/GuardedMutex.hpp
 	src/Common/Utils.cpp
-	src/Common/Utils.hpp
-)
+	src/Common/Utils.hpp)
 if (WIN32)
 	target_link_libraries(SokuLobbiesMainServer ws2_32)
 endif()
@@ -69,6 +68,8 @@ if (SFML_FOUND)
 		target_compile_definitions(SokuLobbiesServer PRIVATE MAIN_SERVER_HOST="${MAIN_SERVER_HOST}")
 	endif ()
 	target_include_directories(SokuLobbiesServer PRIVATE ${SFML_INCLUDE_DIRS})
+	target_link_libraries(SokuLobbiesServer sfml-system sfml-network)
+
 	if (WIN32)
 		target_link_libraries(SokuLobbiesServer ${SFML_NETWORK_LIBRARY} ${SFML_SYSTEM_LIBRARY} ws2_32)
 	else()
@@ -179,8 +180,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 		src/Common/encodingConverter.hpp
 		src/Common/shiftJISConvTable.inl
 		src/Common/shiftJISReverseConvTable.inl
-	)
-	target_compile_options(SokuLobbiesMod PRIVATE /Zi)
+		src/SokuMod/LobbyOptions.cpp
+		src/SokuMod/LobbyOptions.hpp)
+	target_compile_features(SokuLobbiesMod PRIVATE cxx_std_17)
 	target_compile_definitions("SokuLobbiesMod" PRIVATE DIRECTINPUT_VERSION=0x0800 _CRT_SECURE_NO_WARNINGS)
 	target_link_libraries(
 		SokuLobbiesMod
